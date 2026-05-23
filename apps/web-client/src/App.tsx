@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import "./App.css";
+import { config } from "./config";
 
 type TranslationMessage = {
   type: "translation";
@@ -16,7 +17,7 @@ function App() {
   const [translated, setTranslated] = useState("");
 
   function connect() {
-    const socket = new WebSocket("ws://localhost:4000/ws");
+    const socket = new WebSocket(config.websocketUrl)
 
     socket.onopen = () => setStatus("Connected");
     socket.onclose = () => setStatus("Disconnected");
