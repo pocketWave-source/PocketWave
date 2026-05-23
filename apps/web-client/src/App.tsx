@@ -1,98 +1,86 @@
 import { useRef, useState } from "react";
+import "./App.css";
+
+type TranslationMessage = {
+  type: "translation";
+  original: string;
+  translated: string;
+};
 
 function App() {
   const socketRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
   const [status, setStatus] = useState("Disconnected");
-  const [logs, setLogs] = useState<string[]>([]);
+  const [original, setOriginal] = useState("");
+  const [translated, setTranslated] = useState("");
 
-  function addLog(text: string) {
-    setLogs((prev) => [text, ...prev]);
-  }
-
-  async function connect() {
+  function connect() {
     const socket = new WebSocket("ws://localhost:4000/ws");
 
-    socket.onopen = () => {
-      setStatus("Connected");
-      addLog("WebSocket connected");
-    };
+    socket.onopen = () => setStatus("Connected");
+    socket.onclose = () => setStatus("Disconnected");
+    socket.onerror = () => setStatus("Error");
 
     socket.onmessage = (event) => {
-  const parsed = JSON.parse(event.data);
+      const data = JSON.parse(event.data) as TranslationMessage;
 
-  if (parsed.type === "translation") {
-    addLog(`${parsed.original} → ${parsed.translated}`);
-  }
-};
-
-    socket.onclose = () => {
-      setStatus("Disconnected");
-      addLog("WebSocket disconnected");
+      if (data.type === "translation") {
+        setOriginal(data.original);
+        setTranslated(data.translated);
+      }
     };
 
     socketRef.current = socket;
   }
 
   async function startRecording() {
-    if (!socketRef.current) {
+    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
       alert("Connect websocket first");
       return;
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-    });
-
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const mediaRecorder = new MediaRecorder(stream);
 
     mediaRecorder.ondataavailable = async (event) => {
-      if (
-        event.data.size > 0 &&
-        socketRef.current?.readyState === WebSocket.OPEN
-      ) {
-        const arrayBuffer = await event.data.arrayBuffer();
-
-        socketRef.current.send(arrayBuffer);
-
-        addLog(`Sent audio chunk: ${arrayBuffer.byteLength} bytes`);
+      if (event.data.size > 0 && socketRef.current?.readyState === WebSocket.OPEN) {
+        const buffer = await event.data.arrayBuffer();
+        socketRef.current.send(buffer);
       }
     };
 
     mediaRecorder.start(250);
-
     mediaRecorderRef.current = mediaRecorder;
-
-    addLog("Recording started");
   }
 
   function stopRecording() {
     mediaRecorderRef.current?.stop();
-    addLog("Recording stopped");
+    mediaRecorderRef.current = null;
   }
 
   return (
-    <main style={{ padding: 24 }}>
-      <h1>PocketWave Audio Streaming</h1>
+    <main className="app">
+      <section className="panel">
+        <div className="brand">
+          <span className="logo">PocketWave</span>
+          <span className="status">{status}</span>
+        </div>
 
-      <p>Status: {status}</p>
+        <div className="controls">
+          <button onClick={connect}>Connect</button>
+          <button onClick={startRecording}>Start</button>
+          <button onClick={stopRecording}>Stop</button>
+        </div>
+      </section>
 
-      <button onClick={connect}>Connect</button>
+      <section className="subtitleBox">
+        <div className="label">ORIGINAL</div>
+        <p className="original">{original || "Waiting for voice..."}</p>
 
-      <hr />
-
-      <button onClick={startRecording}>Start Recording</button>
-
-      <button onClick={stopRecording}>Stop Recording</button>
-
-      <hr />
-
-      <h2>Logs</h2>
-
-      {logs.map((log, index) => (
-        <pre key={index}>{log}</pre>
-      ))}
+        <div className="label">UKRAINIAN</div>
+        <p className="translated">{translated || "Очікування перекладу..."}</p>
+      </section>
     </main>
   );
 }
