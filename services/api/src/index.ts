@@ -1,3 +1,4 @@
+import "dotenv/config";
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import WebSocket from "ws";
@@ -13,81 +14,212 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-app.get("/health", async () => {
-  return { status: "ok" };
-});
+type ClientSettings = {
+  sourceLanguage: string;
+  targetLanguage: string;
+};
 
-async function translateToUkrainian(text: string) {
+const DEFAULT_SETTINGS: ClientSettings = {
+  sourceLanguage: "en",
+  targetLanguage: "uk",
+};
+
+const targetLanguageNames: Record<string, string> = {
+  uk: "Ukrainian",
+  en: "English",
+  pl: "Polish",
+  de: "German",
+  es: "Spanish",
+  fr: "French",
+};
+
+function buildDeepgramUrl(sourceLanguage: string) {
+  const url = new URL("wss://api.deepgram.com/v1/listen");
+
+  url.searchParams.set("model", "nova-2");
+  url.searchParams.set("language", sourceLanguage);
+  url.searchParams.set("smart_format", "true");
+  url.searchParams.set("interim_results", "true");
+  url.searchParams.set("endpointing", "300");
+
+  return url.toString();
+}
+
+async function translateText(text: string, targetLanguage: string) {
+  const targetName = targetLanguageNames[targetLanguage] ?? "Ukrainian";
+
   const response = await openai.responses.create({
     model: "gpt-4.1-mini",
-    instructions:
-      "Translate gaming voice chat into natural Ukrainian. Keep gaming terms short and clear. Return only the translation.",
+    instructions: `
+Translate gaming voice chat into natural ${targetName}.
+
+Rules:
+- Return only the translation.
+- Keep it short and readable for subtitles.
+- Preserve gaming meaning, not word-for-word translation.
+- Keep known gaming terms natural: rush, rotate, heal, push, site, mid, B, A, flank.
+- Do not add explanations.
+`.trim(),
     input: text,
   });
 
   return response.output_text;
 }
 
+function safeSend(socket: WebSocket, payload: unknown) {
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(payload));
+  }
+}
+
+app.get("/health", async () => {
+  return { status: "ok" };
+});
+
 app.get("/ws", { websocket: true }, (connection) => {
   console.log("Client connected");
 
-  const dgSocket = new WebSocket(
-    "wss://api.deepgram.com/v1/listen?model=nova-2&language=en&smart_format=true",
-    {
+  let settings: ClientSettings = { ...DEFAULT_SETTINGS };
+  let dgSocket: WebSocket | null = null;
+  let lastFinalTranscript = "";
+
+  function connectDeepgram() {
+    if (dgSocket) {
+      dgSocket.close();
+      dgSocket = null;
+    }
+
+    lastFinalTranscript = "";
+
+    const dgUrl = buildDeepgramUrl(settings.sourceLanguage);
+
+    dgSocket = new WebSocket(dgUrl, {
       headers: {
         Authorization: `Token ${process.env.DEEPGRAM_API_KEY}`,
       },
-    }
-  );
+    });
 
-  dgSocket.on("open", () => {
-    console.log("Deepgram connected");
-  });
+    dgSocket.on("open", () => {
+      console.log("Deepgram connected:", settings);
 
-  dgSocket.on("message", async (data) => {
-  const response = JSON.parse(data.toString());
+      safeSend(connection, {
+        type: "stt_ready",
+        sourceLanguage: settings.sourceLanguage,
+        targetLanguage: settings.targetLanguage,
+      });
+    });
 
-  const transcript = response.channel?.alternatives?.[0]?.transcript;
+    dgSocket.on("message", async (data) => {
+      try {
+        const response = JSON.parse(data.toString());
 
-  if (!transcript) return;
+        const transcript =
+          response.channel?.alternatives?.[0]?.transcript?.trim();
 
-  console.log("Transcript:", transcript);
+        if (!transcript) return;
 
-  const translated = await translateToUkrainian(transcript);
+        const isFinal = response.is_final === true;
+        const speechFinal = response.speech_final === true;
 
-  connection.send(
-    JSON.stringify({
-      type: "translation",
-      original: transcript,
-      translated,
-    })
-  );
-});
+        safeSend(connection, {
+          type: "transcript",
+          text: transcript,
+          isFinal,
+          speechFinal,
+        });
 
-  dgSocket.on("error", (error) => {
-    console.error("Deepgram error:", error);
-  });
+        if (!isFinal && !speechFinal) {
+          return;
+        }
+
+        if (transcript === lastFinalTranscript) {
+          return;
+        }
+
+        lastFinalTranscript = transcript;
+
+        console.log("Final transcript:", transcript);
+
+        const translated = await translateText(
+          transcript,
+          settings.targetLanguage
+        );
+
+        safeSend(connection, {
+          type: "translation",
+          original: transcript,
+          translated,
+          sourceLanguage: settings.sourceLanguage,
+          targetLanguage: settings.targetLanguage,
+        });
+      } catch (error) {
+        console.error("Deepgram message parse error:", error);
+      }
+    });
+
+    dgSocket.on("error", (error) => {
+      console.error("Deepgram error:", error);
+
+      safeSend(connection, {
+        type: "error",
+        message: "Deepgram connection error",
+      });
+    });
+
+    dgSocket.on("close", () => {
+      console.log("Deepgram disconnected");
+    });
+  }
 
   connection.on("message", (message, isBinary) => {
     if (isBinary) {
-      if (dgSocket.readyState === WebSocket.OPEN) {
+      if (!dgSocket) {
+        connectDeepgram();
+      }
+
+      if (dgSocket?.readyState === WebSocket.OPEN) {
         dgSocket.send(message);
       }
 
       return;
     }
 
-    console.log("Text:", message.toString());
+    try {
+      const payload = JSON.parse(message.toString());
+
+      if (payload.type === "settings") {
+        settings = {
+          sourceLanguage: payload.sourceLanguage ?? DEFAULT_SETTINGS.sourceLanguage,
+          targetLanguage: payload.targetLanguage ?? DEFAULT_SETTINGS.targetLanguage,
+        };
+
+        console.log("Settings updated:", settings);
+
+        connectDeepgram();
+
+        safeSend(connection, {
+          type: "settings_applied",
+          sourceLanguage: settings.sourceLanguage,
+          targetLanguage: settings.targetLanguage,
+        });
+
+        return;
+      }
+    } catch {
+      console.log("Text message:", message.toString());
+    }
   });
 
   connection.on("close", () => {
     console.log("Client disconnected");
 
-    dgSocket.close();
+    if (dgSocket) {
+      dgSocket.close();
+    }
   });
 });
 
 await app.listen({
-  port: 4000,
+  port: Number(process.env.PORT ?? 4000),
   host: "0.0.0.0",
 });
