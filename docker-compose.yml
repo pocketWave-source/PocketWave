@@ -1,0 +1,25 @@
+services:
+  api:
+    build:
+      context: ./services/api
+    ports:
+      - "4000:4000"
+    env_file:
+      - .env
+    volumes:
+      - ./services/api:/app
+      - /app/node_modules
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: pocketwave
+      POSTGRES_USER: pocketwave
+      POSTGRES_PASSWORD: pocketwave
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"

@@ -1,0 +1,21 @@
+{
+  "name": "pocketwave-api",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.0",
+    "@fastify/websocket": "^11.2.0",
+    "dotenv": "^16.0.0",
+    "fastify": "^5.0.0",
+    "openai": "^6.39.0",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
