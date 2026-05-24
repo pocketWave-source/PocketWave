@@ -214,3 +214,46 @@ button {
   background: #070b18;
   color: white;
 }
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.4);
+}
+
+.deviceRow {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: end;
+  -webkit-app-region: no-drag;
+}
+
+.deviceRow label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: rgba(210, 235, 255, 0.72);
+  font-weight: 700;
+}
+
+.deviceRow select {
+  width: 100%;
+  border: 1px solid rgba(150, 230, 255, 0.28);
+  border-radius: 14px;
+  padding: 9px 12px;
+  background: rgba(6, 12, 28, 0.72);
+  color: white;
+  outline: none;
+  font-weight: 700;
+}
+
+.deviceRow select option {
+  background: #070b18;
+  color: white;
+}
+
+.deviceRow button {
+  padding: 9px 14px;
+}

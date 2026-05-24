@@ -62,12 +62,63 @@ function getLanguageLabel(code: string) {
   return languages.find((language) => language.code === code)?.label ?? code;
 }
 
+function downsampleBuffer(
+  buffer: Float32Array,
+  inputSampleRate: number,
+  outputSampleRate: number
+) {
+  if (outputSampleRate === inputSampleRate) {
+    return buffer;
+  }
+
+  const sampleRateRatio = inputSampleRate / outputSampleRate;
+  const newLength = Math.round(buffer.length / sampleRateRatio);
+  const result = new Float32Array(newLength);
+
+  let offsetResult = 0;
+  let offsetBuffer = 0;
+
+  while (offsetResult < result.length) {
+    const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+
+    let accum = 0;
+    let count = 0;
+
+    for (
+      let i = offsetBuffer;
+      i < nextOffsetBuffer && i < buffer.length;
+      i += 1
+    ) {
+      accum += buffer[i];
+      count += 1;
+    }
+
+    result[offsetResult] = accum / count;
+    offsetResult += 1;
+    offsetBuffer = nextOffsetBuffer;
+  }
+
+  return result;
+}
+
+function convertFloat32ToInt16(buffer: Float32Array) {
+  const result = new Int16Array(buffer.length);
+
+  for (let i = 0; i < buffer.length; i += 1) {
+    const sample = Math.max(-1, Math.min(1, buffer[i]));
+    result[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+  }
+
+  return result;
+}
+
 function App() {
   const socketRef = useRef<WebSocket | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const clearTimerRef = useRef<number | null>(null);
 
   const [status, setStatus] = useState("Disconnected");
+  const [isConnected, setIsConnected] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const [original, setOriginal] = useState("");
   const [translated, setTranslated] = useState("");
   const [clickThrough, setClickThrough] = useState(false);
@@ -76,9 +127,18 @@ function App() {
   const [sourceLanguage, setSourceLanguage] = useState("en");
   const [targetLanguage, setTargetLanguage] = useState("uk");
 
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState("");
+
+const audioContextRef = useRef<AudioContext | null>(null);
+const processorRef = useRef<ScriptProcessorNode | null>(null);
+const streamRef = useRef<MediaStream | null>(null);
+
   useEffect(() => {
     window.pocketwave?.onClickThroughChange(setClickThrough);
     window.pocketwave?.onMinimalModeChange(setMinimalMode);
+
+    loadAudioDevices();
   }, []);
 
   function sendSettings() {
@@ -99,20 +159,30 @@ function App() {
     const socket = new WebSocket("ws://localhost:4000/ws");
 
     socket.onopen = () => {
-      setStatus("Connected");
-      socketRef.current = socket;
+  setStatus("Connected");
+  setIsConnected(true);
+  socketRef.current = socket;
 
-      socket.send(
-        JSON.stringify({
-          type: "settings",
-          sourceLanguage,
-          targetLanguage,
-        })
-      );
-    };
+  socket.send(
+    JSON.stringify({
+      type: "settings",
+      sourceLanguage,
+      targetLanguage,
+    })
+  );
+};
 
-    socket.onclose = () => setStatus("Disconnected");
-    socket.onerror = () => setStatus("Error");
+socket.onclose = () => {
+  setStatus("Disconnected");
+  setIsConnected(false);
+  setIsListening(false);
+};
+
+socket.onerror = () => {
+  setStatus("Error");
+  setIsConnected(false);
+  setIsListening(false);
+};
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data) as ServerMessage;
@@ -150,34 +220,115 @@ function App() {
   }
 
   async function startRecording() {
-    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-      alert("Connect websocket first");
-      return;
-    }
+  if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
+    alert("Connect websocket first");
+    return;
+  }
 
+  if (isListening) {
+    return;
+  }
+
+  try {
     sendSettings();
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mediaRecorder = new MediaRecorder(stream);
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: selectedAudioDeviceId
+        ? {
+            deviceId: {
+              exact: selectedAudioDeviceId,
+            },
+            channelCount: 1,
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: true,
+          }
+        : {
+            channelCount: 1,
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: true,
+          },
+    });
 
-    mediaRecorder.ondataavailable = async (event) => {
-      if (
-        event.data.size > 0 &&
-        socketRef.current?.readyState === WebSocket.OPEN
-      ) {
-        const buffer = await event.data.arrayBuffer();
-        socketRef.current.send(buffer);
+    streamRef.current = stream;
+
+    const audioContext = new AudioContext();
+    audioContextRef.current = audioContext;
+
+    const source = audioContext.createMediaStreamSource(stream);
+
+    const processor = audioContext.createScriptProcessor(4096, 1, 1);
+    processorRef.current = processor;
+
+    processor.onaudioprocess = (event) => {
+      if (socketRef.current?.readyState !== WebSocket.OPEN) {
+        return;
+      }
+
+      const input = event.inputBuffer.getChannelData(0);
+      const downsampled = downsampleBuffer(
+        input,
+        audioContext.sampleRate,
+        16000
+      );
+
+      const pcm16 = convertFloat32ToInt16(downsampled);
+
+      if (pcm16.byteLength > 0) {
+        socketRef.current.send(pcm16.buffer);
       }
     };
 
-    mediaRecorder.start(250);
-    mediaRecorderRef.current = mediaRecorder;
+    source.connect(processor);
+    processor.connect(audioContext.destination);
+
+    setIsListening(true);
+    setStatus("Listening");
+  } catch (error) {
+    console.error("Start recording error:", error);
+    setStatus("Mic Error");
   }
+}
 
   function stopRecording() {
-    mediaRecorderRef.current?.stop();
-    mediaRecorderRef.current = null;
+  processorRef.current?.disconnect();
+  processorRef.current = null;
+
+  audioContextRef.current?.close();
+  audioContextRef.current = null;
+
+  streamRef.current?.getTracks().forEach((track) => {
+    track.stop();
+  });
+  streamRef.current = null;
+
+  setIsListening(false);
+  setStatus(isConnected ? "Connected" : "Disconnected");
+}
+
+async function loadAudioDevices() {
+  try {
+    await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    const devices = await navigator.mediaDevices.enumerateDevices();
+
+    const microphones = devices.filter(
+      (device) => device.kind === "audioinput"
+    );
+
+    setAudioDevices(microphones);
+
+    if (!selectedAudioDeviceId && microphones[0]) {
+      setSelectedAudioDeviceId(microphones[0].deviceId);
+    }
+
+    console.log("Audio input devices:", microphones);
+  } catch (error) {
+    console.error("Failed to load audio devices:", error);
+    setStatus("Mic Error");
   }
+}
 
   return (
     <main className={minimalMode ? "app minimal" : "app"}>
@@ -220,10 +371,36 @@ function App() {
             </label>
           </div>
 
+          <div className="deviceRow">
+  <label>
+    Audio input
+    <select
+      value={selectedAudioDeviceId}
+      onChange={(event) => setSelectedAudioDeviceId(event.target.value)}
+    >
+      {audioDevices.map((device) => (
+        <option key={device.deviceId} value={device.deviceId}>
+          {device.label || "Unknown microphone"}
+        </option>
+      ))}
+    </select>
+  </label>
+
+  <button onClick={loadAudioDevices}>Refresh</button>
+</div>
+
           <div className="controls">
-            <button onClick={connect}>Connect</button>
-            <button onClick={startRecording}>Start</button>
-            <button onClick={stopRecording}>Stop</button>
+            <button onClick={connect} disabled={isConnected}>
+  {isConnected ? "Connected" : "Connect"}
+</button>
+
+<button onClick={startRecording} disabled={!isConnected || isListening}>
+  {isListening ? "Listening..." : "Start"}
+</button>
+
+<button onClick={stopRecording} disabled={!isListening}>
+  Stop
+</button>
           </div>
 
           <div className="hotkeys">

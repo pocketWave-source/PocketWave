@@ -42,6 +42,10 @@ function buildDeepgramUrl(sourceLanguage: string) {
   url.searchParams.set("interim_results", "true");
   url.searchParams.set("endpointing", "300");
 
+  url.searchParams.set("encoding", "linear16");
+  url.searchParams.set("sample_rate", "16000");
+  url.searchParams.set("channels", "1");
+
   return url.toString();
 }
 
@@ -112,6 +116,8 @@ app.get("/ws", { websocket: true }, (connection) => {
     dgSocket.on("message", async (data) => {
       try {
         const response = JSON.parse(data.toString());
+
+        console.log("Deepgram raw:", response);
 
         const transcript =
           response.channel?.alternatives?.[0]?.transcript?.trim();
