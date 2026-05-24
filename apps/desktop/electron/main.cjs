@@ -51,6 +51,12 @@ function createWindow() {
     minimalMode = !minimalMode;
     win.webContents.send("overlay-minimal-mode", minimalMode);
   });
+
+  globalShortcut.register("CommandOrControl+Shift+R", () => {
+  if (!win) return;
+
+  win.webContents.send("toggle-listening");
+});
 }
 
 app.whenReady().then(createWindow);

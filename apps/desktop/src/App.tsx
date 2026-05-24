@@ -45,6 +45,7 @@ declare global {
     pocketwave?: {
       onClickThroughChange: (callback: (value: boolean) => void) => void;
       onMinimalModeChange: (callback: (value: boolean) => void) => void;
+      onToggleListening: (callback: () => void) => void;
     };
   }
 }
@@ -134,12 +135,29 @@ const audioContextRef = useRef<AudioContext | null>(null);
 const processorRef = useRef<ScriptProcessorNode | null>(null);
 const streamRef = useRef<MediaStream | null>(null);
 
+const isConnectedRef = useRef(false);
+const isListeningRef = useRef(false);
+
   useEffect(() => {
     window.pocketwave?.onClickThroughChange(setClickThrough);
     window.pocketwave?.onMinimalModeChange(setMinimalMode);
 
     loadAudioDevices();
   }, []);
+
+  useEffect(() => {
+  window.pocketwave?.onToggleListening(() => {
+    void toggleListening();
+  });
+}, []);
+
+  useEffect(() => {
+  isConnectedRef.current = isConnected;
+}, [isConnected]);
+
+useEffect(() => {
+  isListeningRef.current = isListening;
+}, [isListening]);
 
   function sendSettings() {
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
@@ -307,6 +325,19 @@ socket.onerror = () => {
   setStatus(isConnected ? "Connected" : "Disconnected");
 }
 
+async function toggleListening() {
+  if (!isConnectedRef.current) {
+    return;
+  }
+
+  if (isListeningRef.current) {
+    stopRecording();
+    return;
+  }
+
+  await startRecording();
+}
+
 async function loadAudioDevices() {
   try {
     await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -410,6 +441,7 @@ async function loadAudioDevices() {
               {clickThrough ? "ON" : "OFF"}
             </span>
             <span>Ctrl + Shift + M — Minimal mode</span>
+            <span>Ctrl + Shift + R — Start/Stop listening</span>
           </div>
         </section>
       )}

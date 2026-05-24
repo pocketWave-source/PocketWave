@@ -12,4 +12,10 @@ contextBridge.exposeInMainWorld("pocketwave", {
       callback(value);
     });
   },
+
+  onToggleListening: (callback) => {
+  ipcRenderer.on("toggle-listening", () => {
+    callback();
+  });
+},
 });
