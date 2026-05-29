@@ -11,3 +11,5 @@ coverage
 docker-data
 
 *.log
+
+apps/desktop/.env
