@@ -127,6 +127,15 @@ async function sendTranslationToDiscord(
   }
 
   const guildId = interaction.guildId;
+
+  if (!guildId) {
+  return;
+}
+
+if (!canSendDiscordTranslation(guildId, userId)) {
+  return;
+}
+
   const dedupeKey = `${userId}:${original}:${translated}`;
 
   if (lastTranslationByGuild.get(guildId) === dedupeKey) {
@@ -144,6 +153,19 @@ async function sendTranslationToDiscord(
       users: [],
     },
   });
+}
+
+function canSendDiscordTranslation(guildId: string, userId: string) {
+  const key = `${guildId}:${userId}`;
+  const now = Date.now();
+  const lastSentAt = lastDiscordMessageAtByUser.get(key) ?? 0;
+
+  if (now - lastSentAt < DISCORD_MESSAGE_COOLDOWN_MS) {
+    return false;
+  }
+
+  lastDiscordMessageAtByUser.set(key, now);
+  return true;
 }
 
 function stereo48kToMonoFloat32(chunk: Buffer) {
@@ -275,6 +297,16 @@ const client = new Client({
 const activeSubscriptions = new Map<string, Set<Readable>>();
 const lastTranslationByGuild = new Map<string, string>();
 
+const DISCORD_MESSAGE_COOLDOWN_MS = 2000;
+
+const lastDiscordMessageAtByUser = new Map<string, number>();
+
+type ActiveTranscriber = {
+  stop: () => void;
+};
+
+const activeGuildTranscribers = new Map<string, ActiveTranscriber>();
+
 client.once("ready", () => {
   console.log(`PocketWave Discord bot logged in as ${client.user?.tag}`);
 });
@@ -334,6 +366,14 @@ client.on("interactionCreate", async (interaction) => {
     return;
   }
 
+  if (activeGuildTranscribers.has(interaction.guildId)) {
+  await interaction.reply({
+    content: "PocketWave is already transcribing this server. Use `/stop` first.",
+    ephemeral: true,
+  });
+  return;
+}
+
   const connection = getVoiceConnection(interaction.guildId);
 
   if (!connection) {
@@ -361,15 +401,15 @@ console.log("Transcribe settings:", {
     activeSubscriptions.set(interaction.guildId, guildSubscriptions);
   }
 
-  receiver.speaking.on("start", (userId) => {
+  const handleSpeakingStart = (userId: string) => {
   console.log("User started speaking:", userId);
 
   const apiSocket = createPocketWaveApiSocket(
-  interaction,
-  userId,
-  sourceLanguage,
-  targetLanguage
-);
+    interaction,
+    userId,
+    sourceLanguage,
+    targetLanguage
+  );
 
   const opusStream = receiver.subscribe(userId, {
     end: {
@@ -392,8 +432,7 @@ console.log("Transcribe settings:", {
   opusStream.pipe(decoder);
 
   decoder.on("data", (discordPcmChunk: Buffer) => {
-    const deepgramPcmChunk =
-      convertDiscordPcmToDeepgramPcm(discordPcmChunk);
+    const deepgramPcmChunk = convertDiscordPcmToDeepgramPcm(discordPcmChunk);
 
     pcmChunkCount += 1;
     pcmByteCount += deepgramPcmChunk.length;
@@ -430,6 +469,28 @@ console.log("Transcribe settings:", {
     apiSocket.close();
     guildSubscriptions?.delete(opusStream);
   });
+};
+
+receiver.speaking.on("start", handleSpeakingStart);
+
+activeGuildTranscribers.set(interaction.guildId, {
+  stop: () => {
+    receiver.speaking.off("start", handleSpeakingStart);
+
+    const guildSubscriptions = activeSubscriptions.get(interaction.guildId);
+
+    if (guildSubscriptions) {
+      for (const stream of guildSubscriptions) {
+        stream.destroy();
+      }
+
+      guildSubscriptions.clear();
+    }
+
+    activeGuildTranscribers.delete(interaction.guildId);
+
+    console.log("Active transcriber stopped for guild:", interaction.guildId);
+  },
 });
 
   await interaction.reply(
@@ -449,25 +510,21 @@ if (interaction.commandName === "stop") {
     return;
   }
 
-  const guildSubscriptions = activeSubscriptions.get(interaction.guildId);
+  const transcriber = activeGuildTranscribers.get(interaction.guildId);
 
-  if (!guildSubscriptions || guildSubscriptions.size === 0) {
-    await interaction.reply({
-      content: "PocketWave is not currently listening.",
-      ephemeral: true,
-    });
-    return;
-  }
-
-  for (const stream of guildSubscriptions) {
-    stream.destroy();
-  }
-
-  guildSubscriptions.clear();
-
-  await interaction.reply("PocketWave stopped listening.");
-  console.log("Transcription listener stopped");
+if (!transcriber) {
+  await interaction.reply({
+    content: "PocketWave is not currently transcribing this server.",
+    ephemeral: true,
+  });
   return;
+}
+
+transcriber.stop();
+
+await interaction.reply("PocketWave stopped transcribing.");
+console.log("Transcription stopped");
+return;
 }
 
   if (interaction.commandName === "leave") {
