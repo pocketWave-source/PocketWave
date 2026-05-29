@@ -64,14 +64,18 @@ function broadcastToRoom(roomId: string, payload: unknown) {
   }
 }
 
+type TranslationMode = "normal" | "tactical";
+
 type ClientSettings = {
   sourceLanguage: string;
   targetLanguage: string;
+  mode: TranslationMode;
 };
 
 const DEFAULT_SETTINGS: ClientSettings = {
   sourceLanguage: "en",
   targetLanguage: "uk",
+  mode: "normal",
 };
 
 const targetLanguageNames: Record<string, string> = {
@@ -99,12 +103,14 @@ function buildDeepgramUrl(sourceLanguage: string) {
   return url.toString();
 }
 
-async function translateText(text: string, targetLanguage: string) {
+async function translateText(
+  text: string,
+  targetLanguage: string,
+  mode: TranslationMode
+) {
   const targetName = targetLanguageNames[targetLanguage] ?? "Ukrainian";
 
-  const response = await openai.responses.create({
-    model: "gpt-4.1-mini",
-    instructions: `
+  const normalInstructions = `
 Translate gaming voice chat into natural ${targetName}.
 
 Rules:
@@ -113,7 +119,31 @@ Rules:
 - Preserve gaming meaning, not word-for-word translation.
 - Keep known gaming terms natural: rush, rotate, heal, push, site, mid, B, A, flank.
 - Do not add explanations.
-`.trim(),
+`.trim();
+
+  const tacticalInstructions = `
+Convert gaming voice chat into a short tactical callout in ${targetName}.
+
+Rules:
+- Return only the tactical callout.
+- Maximum 1 short line.
+- Prefer 2-6 words when possible.
+- Keep urgent gameplay meaning.
+- Remove filler words.
+- Use short gamer-style phrases.
+- Preserve important map/game terms like A, B, mid, short, long, flank, ship, left, right.
+- Do not explain.
+- Do not add extra context.
+
+Examples:
+"They are coming from the left side of our ship" -> "Ворог зліва. Біля корабля."
+"Rush B fast, one is low" -> "Швидко B. Один low."
+"I need healing behind the wall" -> "Потрібен heal за стіною."
+`.trim();
+
+  const response = await openai.responses.create({
+    model: "gpt-4.1-mini",
+    instructions: mode === "tactical" ? tacticalInstructions : normalInstructions,
     input: text,
   });
 
@@ -198,7 +228,8 @@ app.get("/ws", { websocket: true }, (connection) => {
 
         const translated = await translateText(
           transcript,
-          settings.targetLanguage
+          settings.targetLanguage,
+          settings.mode
         );
 
         safeSend(connection, {
@@ -207,6 +238,7 @@ app.get("/ws", { websocket: true }, (connection) => {
           translated,
           sourceLanguage: settings.sourceLanguage,
           targetLanguage: settings.targetLanguage,
+          mode: settings.mode,
         });
       } catch (error) {
         console.error("Deepgram message parse error:", error);
@@ -244,10 +276,14 @@ app.get("/ws", { websocket: true }, (connection) => {
       const payload = JSON.parse(message.toString());
 
       if (payload.type === "settings") {
-        settings = {
-          sourceLanguage: payload.sourceLanguage ?? DEFAULT_SETTINGS.sourceLanguage,
-          targetLanguage: payload.targetLanguage ?? DEFAULT_SETTINGS.targetLanguage,
-        };
+        const incomingMode =
+    payload.mode === "tactical" ? "tactical" : DEFAULT_SETTINGS.mode;
+
+  settings = {
+    sourceLanguage: payload.sourceLanguage ?? DEFAULT_SETTINGS.sourceLanguage,
+    targetLanguage: payload.targetLanguage ?? DEFAULT_SETTINGS.targetLanguage,
+    mode: incomingMode,
+  };
 
         console.log("Settings updated:", settings);
 
@@ -257,10 +293,25 @@ app.get("/ws", { websocket: true }, (connection) => {
           type: "settings_applied",
           sourceLanguage: settings.sourceLanguage,
           targetLanguage: settings.targetLanguage,
+          mode: settings.mode,
         });
 
         return;
       }
+
+      if (payload.type === "finalize") {
+  console.log("Finalize requested");
+
+  if (dgSocket?.readyState === WebSocket.OPEN) {
+    dgSocket.send(
+      JSON.stringify({
+        type: "Finalize",
+      })
+    );
+  }
+
+  return;
+}
       if (payload.type === "join_room") {
   const roomId = String(payload.roomId ?? "");
   const role = payload.role === "producer" ? "producer" : "viewer";

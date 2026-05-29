@@ -32,6 +32,11 @@ const languages = [
   { name: "French", value: "fr" },
 ];
 
+const translationModes = [
+  { name: "Normal", value: "normal" },
+  { name: "Tactical", value: "tactical" },
+];
+
 const DISCORD_SAMPLE_RATE = 48000;
 const TARGET_SAMPLE_RATE = 16000;
 const DISCORD_CHANNELS = 2;
@@ -40,7 +45,8 @@ function createPocketWaveApiSocket(
   interaction: any,
   userId: string,
   sourceLanguage: string,
-  targetLanguage: string
+  targetLanguage: string,
+  mode: string
 ) {
   const socket = new WebSocket(apiWsUrl);
 
@@ -52,6 +58,7 @@ function createPocketWaveApiSocket(
     type: "settings",
     sourceLanguage,
     targetLanguage,
+    mode,
   })
 );
   });
@@ -273,6 +280,13 @@ const commands = [
       .setDescription("Target language")
       .setRequired(false)
       .addChoices(...languages)
+  )
+  .addStringOption((option) =>
+    option
+      .setName("mode")
+      .setDescription("Translation mode")
+      .setRequired(false)
+      .addChoices(...translationModes)
   ),
 
   new SlashCommandBuilder()
@@ -387,9 +401,12 @@ client.on("interactionCreate", async (interaction) => {
   const sourceLanguage = interaction.options.getString("from") ?? "en";
 const targetLanguage = interaction.options.getString("to") ?? "uk";
 
+const mode = interaction.options.getString("mode") ?? "normal";
+
 console.log("Transcribe settings:", {
   sourceLanguage,
   targetLanguage,
+  mode,
 });
 
   const receiver = connection.receiver;
@@ -408,7 +425,8 @@ console.log("Transcribe settings:", {
     interaction,
     userId,
     sourceLanguage,
-    targetLanguage
+    targetLanguage,
+    mode
   );
 
   const opusStream = receiver.subscribe(userId, {
@@ -453,14 +471,30 @@ console.log("Transcribe settings:", {
   });
 
   opusStream.on("end", () => {
-    console.log(
-      `User stopped speaking: ${userId}. Converted chunks: ${pcmChunkCount}, bytes: ${pcmByteCount}`
+  console.log(
+    `User stopped speaking: ${userId}. Converted chunks: ${pcmChunkCount}, bytes: ${pcmByteCount}`
+  );
+
+  decoder.destroy();
+  guildSubscriptions?.delete(opusStream);
+
+  if (apiSocket.readyState === WebSocket.OPEN) {
+    apiSocket.send(
+      JSON.stringify({
+        type: "finalize",
+      })
     );
 
-    decoder.destroy();
-    apiSocket.close();
-    guildSubscriptions?.delete(opusStream);
-  });
+    console.log("Sent finalize to PocketWave API");
+  }
+
+  setTimeout(() => {
+    if (apiSocket.readyState === WebSocket.OPEN) {
+      apiSocket.close();
+      console.log("Closed PocketWave API socket after finalize delay");
+    }
+  }, 6000);
+});
 
   opusStream.on("error", (error) => {
     console.error("Opus stream error:", error);
@@ -494,7 +528,7 @@ activeGuildTranscribers.set(interaction.guildId, {
 });
 
   await interaction.reply(
-  `🎧 PocketWave is now listening and translating this voice channel: **${sourceLanguage} → ${targetLanguage}**. Use \`/stop\` to stop.`
+  `🎧 PocketWave is now listening: **${sourceLanguage} → ${targetLanguage}**, mode: **${mode}**. Use \`/stop\` to stop.`
 );
 
   console.log("Transcription listener started");
