@@ -33,12 +33,21 @@ type ErrorMessage = {
   message: string;
 };
 
+type OverlayTranslationMessage = {
+  type: "overlay_translation";
+  roomId: string;
+  userId?: string;
+  original: string;
+  translated: string;
+};
+
 type ServerMessage =
   | TranscriptMessage
   | TranslationMessage
   | SettingsAppliedMessage
   | SttReadyMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | OverlayTranslationMessage;
 
 declare global {
   interface Window {
@@ -131,6 +140,8 @@ function App() {
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
 const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState("");
 
+const [roomId, setRoomId] = useState(import.meta.env.VITE_ROOM_ID ?? "");
+
 const audioContextRef = useRef<AudioContext | null>(null);
 const processorRef = useRef<ScriptProcessorNode | null>(null);
 const streamRef = useRef<MediaStream | null>(null);
@@ -180,6 +191,16 @@ useEffect(() => {
   setStatus("Connected");
   setIsConnected(true);
   socketRef.current = socket;
+  
+  if (roomId) {
+  socket.send(
+    JSON.stringify({
+      type: "join_room",
+      roomId,
+      role: "viewer",
+    })
+  );
+}
 
   socket.send(
     JSON.stringify({
@@ -220,6 +241,20 @@ socket.onerror = () => {
       if (data.type === "transcript") {
         setOriginal(data.text);
       }
+
+      if (data.type === "overlay_translation") {
+  setOriginal(String(data.original ?? ""));
+  setTranslated(String(data.translated ?? ""));
+
+  if (clearTimerRef.current) {
+    window.clearTimeout(clearTimerRef.current);
+  }
+
+  clearTimerRef.current = window.setTimeout(() => {
+    setOriginal("");
+    setTranslated("");
+  }, 5000);
+}
 
       if (data.type === "translation") {
         setOriginal(data.original);
@@ -401,6 +436,17 @@ async function loadAudioDevices() {
               </select>
             </label>
           </div>
+
+          <div className="roomRow">
+  <label>
+    Room ID
+    <input
+      value={roomId}
+      onChange={(event) => setRoomId(event.target.value)}
+      placeholder="Discord server ID"
+    />
+  </label>
+</div>
 
           <div className="deviceRow">
   <label>

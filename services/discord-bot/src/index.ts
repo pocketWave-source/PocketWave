@@ -55,6 +55,17 @@ function createPocketWaveApiSocket(interaction: any, userId: string) {
         parsed.original,
         parsed.translated
       );
+      if (socket.readyState === WebSocket.OPEN) {
+  socket.send(
+    JSON.stringify({
+      type: "room_translation",
+      roomId: interaction.guildId,
+      userId,
+      original: parsed.original,
+      translated: parsed.translated,
+    })
+  );
+}
     }
   } catch (error) {
     console.error("Failed to handle API message:", error);

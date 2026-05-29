@@ -14,6 +14,56 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+type RoomClient = {
+  socket: WebSocket;
+  role: "viewer" | "producer";
+};
+
+const rooms = new Map<string, Set<RoomClient>>();
+
+function joinRoom(roomId: string, client: RoomClient) {
+  let room = rooms.get(roomId);
+
+  if (!room) {
+    room = new Set();
+    rooms.set(roomId, room);
+  }
+
+  room.add(client);
+
+  console.log(`Client joined room ${roomId} as ${client.role}`);
+}
+
+function leaveAllRooms(socket: WebSocket) {
+  for (const [roomId, clients] of rooms.entries()) {
+    for (const client of clients) {
+      if (client.socket === socket) {
+        clients.delete(client);
+      }
+    }
+
+    if (clients.size === 0) {
+      rooms.delete(roomId);
+    }
+  }
+}
+
+function broadcastToRoom(roomId: string, payload: unknown) {
+  const room = rooms.get(roomId);
+
+  if (!room) {
+    return;
+  }
+
+  const message = JSON.stringify(payload);
+
+  for (const client of room) {
+    if (client.socket.readyState === WebSocket.OPEN) {
+      client.socket.send(message);
+    }
+  }
+}
+
 type ClientSettings = {
   sourceLanguage: string;
   targetLanguage: string;
@@ -211,6 +261,53 @@ app.get("/ws", { websocket: true }, (connection) => {
 
         return;
       }
+      if (payload.type === "join_room") {
+  const roomId = String(payload.roomId ?? "");
+  const role = payload.role === "producer" ? "producer" : "viewer";
+
+  if (!roomId) {
+    safeSend(connection, {
+      type: "error",
+      message: "roomId is required",
+    });
+    return;
+  }
+
+  joinRoom(roomId, {
+    socket: connection,
+    role,
+  });
+
+  safeSend(connection, {
+    type: "room_joined",
+    roomId,
+    role,
+  });
+
+  return;
+}
+
+if (payload.type === "room_translation") {
+  const roomId = String(payload.roomId ?? "");
+
+  if (!roomId) {
+    safeSend(connection, {
+      type: "error",
+      message: "roomId is required",
+    });
+    return;
+  }
+
+  broadcastToRoom(roomId, {
+    type: "overlay_translation",
+    roomId,
+    userId: payload.userId,
+    original: payload.original,
+    translated: payload.translated,
+  });
+
+  return;
+}
     } catch {
       console.log("Text message:", message.toString());
     }
@@ -218,6 +315,8 @@ app.get("/ws", { websocket: true }, (connection) => {
 
   connection.on("close", () => {
     console.log("Client disconnected");
+
+    leaveAllRooms(connection);
 
     if (dgSocket) {
       dgSocket.close();

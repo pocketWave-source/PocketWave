@@ -257,3 +257,27 @@ button:disabled {
 .deviceRow button {
   padding: 9px 14px;
 }
+
+.roomRow {
+  margin-top: 12px;
+  -webkit-app-region: no-drag;
+}
+
+.roomRow label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: rgba(210, 235, 255, 0.72);
+  font-weight: 700;
+}
+
+.roomRow input {
+  width: 100%;
+  border: 1px solid rgba(150, 230, 255, 0.28);
+  border-radius: 14px;
+  padding: 9px 12px;
+  background: rgba(6, 12, 28, 0.72);
+  color: white;
+  outline: none;
+  font-weight: 700;
+}
