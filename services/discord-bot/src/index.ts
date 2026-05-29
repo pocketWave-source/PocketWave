@@ -23,23 +23,37 @@ const guildId = process.env.DISCORD_GUILD_ID;
 
 const apiWsUrl = process.env.POCKETWAVE_API_WS_URL ?? "ws://api:4000/ws";
 
+const languages = [
+  { name: "English", value: "en" },
+  { name: "Ukrainian", value: "uk" },
+  { name: "Polish", value: "pl" },
+  { name: "German", value: "de" },
+  { name: "Spanish", value: "es" },
+  { name: "French", value: "fr" },
+];
+
 const DISCORD_SAMPLE_RATE = 48000;
 const TARGET_SAMPLE_RATE = 16000;
 const DISCORD_CHANNELS = 2;
 
-function createPocketWaveApiSocket(interaction: any, userId: string) {
+function createPocketWaveApiSocket(
+  interaction: any,
+  userId: string,
+  sourceLanguage: string,
+  targetLanguage: string
+) {
   const socket = new WebSocket(apiWsUrl);
 
   socket.on("open", () => {
     console.log("Connected to PocketWave API WebSocket");
 
     socket.send(
-      JSON.stringify({
-        type: "settings",
-        sourceLanguage: "en",
-        targetLanguage: "uk",
-      })
-    );
+  JSON.stringify({
+    type: "settings",
+    sourceLanguage,
+    targetLanguage,
+  })
+);
   });
 
   socket.on("message", async (message) => {
@@ -222,8 +236,22 @@ const commands = [
     .setDescription("Leave the current voice channel"),
 
   new SlashCommandBuilder()
-    .setName("transcribe")
-    .setDescription("Start listening to the current voice channel"),
+  .setName("transcribe")
+  .setDescription("Start listening and translating the current voice channel")
+  .addStringOption((option) =>
+    option
+      .setName("from")
+      .setDescription("Source language")
+      .setRequired(false)
+      .addChoices(...languages)
+  )
+  .addStringOption((option) =>
+    option
+      .setName("to")
+      .setDescription("Target language")
+      .setRequired(false)
+      .addChoices(...languages)
+  ),
 
   new SlashCommandBuilder()
     .setName("stop")
@@ -316,6 +344,14 @@ client.on("interactionCreate", async (interaction) => {
     return;
   }
 
+  const sourceLanguage = interaction.options.getString("from") ?? "en";
+const targetLanguage = interaction.options.getString("to") ?? "uk";
+
+console.log("Transcribe settings:", {
+  sourceLanguage,
+  targetLanguage,
+});
+
   const receiver = connection.receiver;
 
   let guildSubscriptions = activeSubscriptions.get(interaction.guildId);
@@ -328,7 +364,12 @@ client.on("interactionCreate", async (interaction) => {
   receiver.speaking.on("start", (userId) => {
   console.log("User started speaking:", userId);
 
-  const apiSocket = createPocketWaveApiSocket(interaction, userId);
+  const apiSocket = createPocketWaveApiSocket(
+  interaction,
+  userId,
+  sourceLanguage,
+  targetLanguage
+);
 
   const opusStream = receiver.subscribe(userId, {
     end: {
@@ -392,7 +433,7 @@ client.on("interactionCreate", async (interaction) => {
 });
 
   await interaction.reply(
-  "🎧 PocketWave is now listening and translating this voice channel. Use `/stop` to stop."
+  `🎧 PocketWave is now listening and translating this voice channel: **${sourceLanguage} → ${targetLanguage}**. Use \`/stop\` to stop.`
 );
 
   console.log("Transcription listener started");
