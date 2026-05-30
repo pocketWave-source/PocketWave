@@ -68,6 +68,16 @@ const languages = [
   { code: "fr", label: "French" },
 ];
 
+const STORAGE_KEYS = {
+  roomId: "pocketwave.roomId",
+  sourceLanguage: "pocketwave.sourceLanguage",
+  targetLanguage: "pocketwave.targetLanguage",
+};
+
+function getStoredValue(key: string, fallback: string) {
+  return localStorage.getItem(key) ?? fallback;
+}
+
 function getLanguageLabel(code: string) {
   return languages.find((language) => language.code === code)?.label ?? code;
 }
@@ -134,13 +144,20 @@ function App() {
   const [clickThrough, setClickThrough] = useState(false);
   const [minimalMode, setMinimalMode] = useState(false);
 
-  const [sourceLanguage, setSourceLanguage] = useState("en");
-  const [targetLanguage, setTargetLanguage] = useState("uk");
+  const [sourceLanguage, setSourceLanguage] = useState(() =>
+  getStoredValue(STORAGE_KEYS.sourceLanguage, "en")
+);
+
+  const [targetLanguage, setTargetLanguage] = useState(() =>
+  getStoredValue(STORAGE_KEYS.targetLanguage, "uk")
+);
 
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
 const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState("");
 
-const [roomId, setRoomId] = useState(import.meta.env.VITE_ROOM_ID ?? "");
+const [roomId, setRoomId] = useState(() =>
+  getStoredValue(STORAGE_KEYS.roomId, import.meta.env.VITE_ROOM_ID ?? "")
+);
 
 const audioContextRef = useRef<AudioContext | null>(null);
 const processorRef = useRef<ScriptProcessorNode | null>(null);
@@ -169,6 +186,18 @@ const isListeningRef = useRef(false);
 useEffect(() => {
   isListeningRef.current = isListening;
 }, [isListening]);
+
+useEffect(() => {
+  localStorage.setItem(STORAGE_KEYS.roomId, roomId);
+}, [roomId]);
+
+useEffect(() => {
+  localStorage.setItem(STORAGE_KEYS.sourceLanguage, sourceLanguage);
+}, [sourceLanguage]);
+
+useEffect(() => {
+  localStorage.setItem(STORAGE_KEYS.targetLanguage, targetLanguage);
+}, [targetLanguage]);
 
   function sendSettings() {
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
