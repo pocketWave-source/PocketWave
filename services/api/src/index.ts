@@ -356,6 +356,7 @@ if (payload.type === "room_translation") {
     speakerName: payload.speakerName,
     original: payload.original,
     translated: payload.translated,
+    mode: payload.mode ?? "normal",
   });
 
   return;

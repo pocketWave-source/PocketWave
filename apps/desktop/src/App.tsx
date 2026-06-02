@@ -16,6 +16,7 @@ type TranslationMessage = {
   translated: string;
   sourceLanguage: string;
   targetLanguage: string;
+  mode?: "normal" | "tactical";
 };
 
 type SettingsAppliedMessage = {
@@ -42,6 +43,7 @@ type OverlayTranslationMessage = {
   speakerName?: string;
   original: string;
   translated: string;
+  mode?: "normal" | "tactical";
 };
 
 type RoomJoinedMessage = {
@@ -55,6 +57,7 @@ type TranslationHistoryItem = {
   speakerName: string;
   original: string;
   translated: string;
+  mode: "normal" | "tactical";
   createdAt: number;
 };
 
@@ -197,6 +200,7 @@ const [inputSource, setInputSource] = useState<InputSource>(() => {
 });
 
 const [roomStatus, setRoomStatus] = useState("Room not joined");
+const [currentMode, setCurrentMode] = useState<"normal" | "tactical">("normal");
 
 const [translationHistory, setTranslationHistory] = useState<
   TranslationHistoryItem[]
@@ -307,19 +311,23 @@ function showLiveSubtitle(payload: {
   speakerName?: string;
   original: string;
   translated: string;
+  mode?: "normal" | "tactical";
 }) {
   const nextSpeakerName = payload.speakerName ?? "";
   const nextOriginal = payload.original ?? "";
   const nextTranslated = payload.translated ?? "";
+  const nextMode = payload.mode ?? "normal";
 
   setSpeakerName(nextSpeakerName);
   setOriginal(nextOriginal);
   setTranslated(nextTranslated);
+  setCurrentMode(nextMode);
 
   addToTranslationHistory({
     speakerName: nextSpeakerName,
     original: nextOriginal,
     translated: nextTranslated,
+    mode: nextMode,
   });
 
   if (clearTimerRef.current) {
@@ -330,6 +338,7 @@ function showLiveSubtitle(payload: {
     setSpeakerName("");
     setOriginal("");
     setTranslated("");
+    setCurrentMode("normal");
     setRoomStatus(roomId ? `Room joined: ${roomId}` : "Room not joined");
   }, 6000);
 }
@@ -426,6 +435,7 @@ socket.onerror = () => {
     speakerName: String(data.speakerName ?? ""),
     original: String(data.original ?? ""),
     translated: String(data.translated ?? ""),
+    mode: data.mode ?? "normal",
   });
 }
 
@@ -434,6 +444,7 @@ socket.onerror = () => {
     speakerName: inputSource === "microphone" ? "You" : "",
     original: data.original,
     translated: data.translated,
+    mode: data.mode ?? "normal",
   });
 }
     };
@@ -697,28 +708,51 @@ async function loadAudioDevices() {
         </section>
       )}
 
-      <section className={translated ? "subtitleHud active" : "subtitleHud idle"}>
-        {speakerName && <p className="hudSpeaker">{speakerName}</p>}
-        {original && <p className="hudOriginal">{original}</p>}
+<section className={translated ? "subtitleHud active" : "subtitleHud idle"}>
+  {translated && (
+    <div
+      className={
+        currentMode === "tactical"
+          ? "modeBadge tactical"
+          : "modeBadge"
+      }
+    >
+      {currentMode}
+    </div>
+  )}
 
-        {translated ? (
-          <p className="hudTranslated">{translated}</p>
-        ) : (
-          <p className="hudWaiting">
-            {inputSource === "discord"
-  ? `Discord room: ${roomId || "not set"}`
-  : `Listening: ${getLanguageLabel(sourceLanguage)} → ${getLanguageLabel(
-      targetLanguage
-    )}`}
-          </p>
-        )}
-      </section>
-      {!minimalMode && translationHistory.length > 0 && (
+  {speakerName && <p className="hudSpeaker">{speakerName}</p>}
+
+  {original && <p className="hudOriginal">{original}</p>}
+
+  {translated ? (
+    <p className="hudTranslated">{translated}</p>
+  ) : (
+    <p className="hudWaiting">
+      {inputSource === "discord"
+        ? `Discord room: ${roomId || "not set"}`
+        : `Listening: ${getLanguageLabel(sourceLanguage)} → ${getLanguageLabel(
+            targetLanguage
+          )}`}
+    </p>
+  )}
+</section>
+{!minimalMode && translationHistory.length > 0 && (
   <section className="historyPanel">
     <div className="historyTitle">Recent translations</div>
 
     {translationHistory.map((item) => (
       <div key={item.id} className="historyItem">
+        <div
+          className={
+            item.mode === "tactical"
+              ? "historyMode tactical"
+              : "historyMode"
+          }
+        >
+          {item.mode}
+        </div>
+
         {item.speakerName && (
           <div className="historySpeaker">{item.speakerName}</div>
         )}

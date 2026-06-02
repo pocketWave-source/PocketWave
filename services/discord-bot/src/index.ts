@@ -87,6 +87,7 @@ function createPocketWaveApiSocket(
       speakerName,
       original: parsed.original,
       translated: parsed.translated,
+      mode: parsed.mode ?? "normal",
     })
   );
 }
@@ -112,6 +113,7 @@ type PocketWaveApiMessage =
       type: "translation";
       original: string;
       translated: string;
+      mode?: "normal" | "tactical";
     }
   | {
       type: "transcript";
