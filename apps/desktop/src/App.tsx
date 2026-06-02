@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 
+type InputSource = "discord" | "microphone";
+
 type TranscriptMessage = {
   type: "transcript";
   text: string;
@@ -72,6 +74,7 @@ const STORAGE_KEYS = {
   roomId: "pocketwave.roomId",
   sourceLanguage: "pocketwave.sourceLanguage",
   targetLanguage: "pocketwave.targetLanguage",
+  inputSource: "pocketwave.inputSource",
 };
 
 function getStoredValue(key: string, fallback: string) {
@@ -169,6 +172,12 @@ const isListeningRef = useRef(false);
 const reconnectTimerRef = useRef<number | null>(null);
 const shouldReconnectRef = useRef(true);
 
+const [inputSource, setInputSource] = useState<InputSource>(() => {
+  const stored = getStoredValue(STORAGE_KEYS.inputSource, "discord");
+
+  return stored === "microphone" ? "microphone" : "discord";
+});
+
   useEffect(() => {
     window.pocketwave?.onClickThroughChange(setClickThrough);
     window.pocketwave?.onMinimalModeChange(setMinimalMode);
@@ -201,6 +210,10 @@ useEffect(() => {
 useEffect(() => {
   localStorage.setItem(STORAGE_KEYS.targetLanguage, targetLanguage);
 }, [targetLanguage]);
+
+useEffect(() => {
+  localStorage.setItem(STORAGE_KEYS.inputSource, inputSource);
+}, [inputSource]);
 
   function sendSettings() {
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
@@ -277,7 +290,7 @@ function scheduleReconnect() {
   setIsConnected(true);
   socketRef.current = socket;
   
-  if (roomId) {
+  if (inputSource === "discord" && roomId) {
   socket.send(
     JSON.stringify({
       type: "join_room",
@@ -366,6 +379,10 @@ socket.onerror = () => {
     return;
   }
 
+  if (inputSource !== "microphone") {
+  return;
+}
+
   if (isListening) {
     return;
   }
@@ -449,6 +466,10 @@ socket.onerror = () => {
 }
 
 async function toggleListening() {
+  if (inputSource !== "microphone") {
+    return;
+  }
+
   if (!isConnectedRef.current) {
     return;
   }
@@ -495,6 +516,22 @@ async function loadAudioDevices() {
             </div>
           </div>
 
+          <div className="inputSourceRow">
+  <button
+    className={inputSource === "discord" ? "sourceButton active" : "sourceButton"}
+    onClick={() => setInputSource("discord")}
+  >
+    Discord Voice
+  </button>
+
+  <button
+    className={inputSource === "microphone" ? "sourceButton active" : "sourceButton"}
+    onClick={() => setInputSource("microphone")}
+  >
+    Local Microphone
+  </button>
+</div>
+
           <div className="languageRow">
             <label>
               From
@@ -525,6 +562,7 @@ async function loadAudioDevices() {
             </label>
           </div>
 
+{inputSource === "discord" && (
           <div className="roomRow">
   <label>
     Room ID
@@ -535,13 +573,15 @@ async function loadAudioDevices() {
     />
   </label>
 </div>
+)}
 
-          <div className="deviceRow">
-  <label>
-    Audio input
-    <select
-      value={selectedAudioDeviceId}
-      onChange={(event) => setSelectedAudioDeviceId(event.target.value)}
+{inputSource === "microphone" && (
+  <div className="deviceRow">
+    <label>
+      Audio input
+      <select
+        value={selectedAudioDeviceId}
+        onChange={(event) => setSelectedAudioDeviceId(event.target.value)}
     >
       {audioDevices.map((device) => (
         <option key={device.deviceId} value={device.deviceId}>
@@ -553,19 +593,24 @@ async function loadAudioDevices() {
 
   <button onClick={loadAudioDevices}>Refresh</button>
 </div>
+)}
 
           <div className="controls">
             <button onClick={connect} disabled={isConnected}>
   {isConnected ? "Connected" : "Connect"}
 </button>
 
-<button onClick={startRecording} disabled={!isConnected || isListening}>
-  {isListening ? "Listening..." : "Start"}
-</button>
+{inputSource === "microphone" && (
+  <>
+    <button onClick={startRecording} disabled={!isConnected || isListening}>
+      {isListening ? "Listening..." : "Start"}
+    </button>
 
-<button onClick={stopRecording} disabled={!isListening}>
-  Stop
-</button>
+    <button onClick={stopRecording} disabled={!isListening}>
+      Stop
+    </button>
+  </>
+)}
           </div>
 
           <div className="hotkeys">
@@ -587,8 +632,11 @@ async function loadAudioDevices() {
           <p className="hudTranslated">{translated}</p>
         ) : (
           <p className="hudWaiting">
-            Listening: {getLanguageLabel(sourceLanguage)} →{" "}
-            {getLanguageLabel(targetLanguage)}
+            {inputSource === "discord"
+  ? `Discord room: ${roomId || "not set"}`
+  : `Listening: ${getLanguageLabel(sourceLanguage)} → ${getLanguageLabel(
+      targetLanguage
+    )}`}
           </p>
         )}
       </section>

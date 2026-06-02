@@ -281,3 +281,27 @@ button:disabled {
   outline: none;
   font-weight: 700;
 }
+
+.inputSourceRow {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  -webkit-app-region: no-drag;
+}
+
+.sourceButton {
+  border: 1px solid rgba(150, 230, 255, 0.25);
+  background: rgba(6, 12, 28, 0.58);
+  color: rgba(220, 240, 255, 0.72);
+}
+
+.sourceButton.active {
+  border-color: rgba(150, 230, 255, 0.7);
+  background: linear-gradient(
+    135deg,
+    rgba(94, 119, 255, 0.9),
+    rgba(0, 210, 255, 0.82)
+  );
+  color: white;
+}
