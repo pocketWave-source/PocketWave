@@ -1,3 +1,4 @@
+const path = require("node:path");
 const { app, BrowserWindow, globalShortcut, screen } = require("electron");
 
 let win;
@@ -30,7 +31,11 @@ function createWindow() {
   });
 
   win.setAlwaysOnTop(true, "screen-saver");
+  if (app.isPackaged) {
+  win.loadFile(path.join(__dirname, "../dist/index.html"));
+} else {
   win.loadURL("http://localhost:5173");
+}
 
   globalShortcut.register("CommandOrControl+Shift+H", () => {
     if (!win) return;
