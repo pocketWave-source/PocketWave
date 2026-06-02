@@ -305,3 +305,15 @@ button:disabled {
   );
   color: white;
 }
+
+.roomStatus {
+  margin-top: 12px;
+  padding: 9px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(150, 230, 255, 0.18);
+  background: rgba(6, 12, 28, 0.45);
+  color: rgba(210, 235, 255, 0.78);
+  font-size: 12px;
+  font-weight: 700;
+  -webkit-app-region: no-drag;
+}

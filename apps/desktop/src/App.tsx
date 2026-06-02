@@ -43,13 +43,20 @@ type OverlayTranslationMessage = {
   translated: string;
 };
 
+type RoomJoinedMessage = {
+  type: "room_joined";
+  roomId: string;
+  role: string;
+};
+
 type ServerMessage =
   | TranscriptMessage
   | TranslationMessage
   | SettingsAppliedMessage
   | SttReadyMessage
   | ErrorMessage
-  | OverlayTranslationMessage;
+  | OverlayTranslationMessage
+  | RoomJoinedMessage;
 
 declare global {
   interface Window {
@@ -178,6 +185,8 @@ const [inputSource, setInputSource] = useState<InputSource>(() => {
   return stored === "microphone" ? "microphone" : "discord";
 });
 
+const [roomStatus, setRoomStatus] = useState("Room not joined");
+
   useEffect(() => {
     window.pocketwave?.onClickThroughChange(setClickThrough);
     window.pocketwave?.onMinimalModeChange(setMinimalMode);
@@ -291,6 +300,8 @@ function scheduleReconnect() {
   socketRef.current = socket;
   
   if (inputSource === "discord" && roomId) {
+  setRoomStatus("Joining room...");
+
   socket.send(
     JSON.stringify({
       type: "join_room",
@@ -298,6 +309,8 @@ function scheduleReconnect() {
       role: "viewer",
     })
   );
+} else if (inputSource === "discord" && !roomId) {
+  setRoomStatus("Room ID is missing");
 }
 
   socket.send(
@@ -313,6 +326,7 @@ socket.onclose = () => {
   setStatus("Disconnected");
   setIsConnected(false);
   setIsListening(false);
+  setRoomStatus("Room disconnected");
   socketRef.current = null;
 
   scheduleReconnect();
@@ -322,6 +336,7 @@ socket.onerror = () => {
   setStatus("Connection Error");
   setIsConnected(false);
   setIsListening(false);
+  setRoomStatus("Connection error");
 };
 
     socket.onmessage = (event) => {
@@ -343,7 +358,13 @@ socket.onerror = () => {
         setOriginal(data.text);
       }
 
+      if (data.type === "room_joined") {
+  setRoomStatus(`Room joined: ${data.roomId}`);
+}
+
       if (data.type === "overlay_translation") {
+  setRoomStatus("Receiving Discord translation");
+
   setOriginal(String(data.original ?? ""));
   setTranslated(String(data.translated ?? ""));
 
@@ -354,6 +375,7 @@ socket.onerror = () => {
   clearTimerRef.current = window.setTimeout(() => {
     setOriginal("");
     setTranslated("");
+    setRoomStatus(roomId ? `Room joined: ${roomId}` : "Room not joined");
   }, 5000);
 }
 
@@ -531,6 +553,12 @@ async function loadAudioDevices() {
     Local Microphone
   </button>
 </div>
+
+{inputSource === "discord" && (
+  <div className="roomStatus">
+    {roomStatus}
+  </div>
+)}
 
           <div className="languageRow">
             <label>
