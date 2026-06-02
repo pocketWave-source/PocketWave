@@ -213,7 +213,24 @@ useEffect(() => {
     );
   }
 
+  useEffect(() => {
+  if (!roomId) {
+    return;
+  }
+
+  const timer = window.setTimeout(() => {
+    connect();
+  }, 400);
+
+  return () => {
+    window.clearTimeout(timer);
+  };
+}, []);
+
   function connect() {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+  return;
+}
     const socket = new WebSocket("ws://localhost:4000/ws");
 
     socket.onopen = () => {
@@ -244,12 +261,14 @@ socket.onclose = () => {
   setStatus("Disconnected");
   setIsConnected(false);
   setIsListening(false);
+  socketRef.current = null;
 };
 
 socket.onerror = () => {
   setStatus("Error");
   setIsConnected(false);
   setIsListening(false);
+  socketRef.current = null;
 };
 
     socket.onmessage = (event) => {
