@@ -317,3 +317,15 @@ button:disabled {
   font-weight: 700;
   -webkit-app-region: no-drag;
 }
+
+.hudSpeaker {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: rgba(125, 235, 255, 0.9);
+  text-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.9),
+    0 0 14px rgba(0, 210, 255, 0.4);
+}

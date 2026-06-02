@@ -39,6 +39,7 @@ type OverlayTranslationMessage = {
   type: "overlay_translation";
   roomId: string;
   userId?: string;
+  speakerName?: string;
   original: string;
   translated: string;
 };
@@ -168,6 +169,8 @@ const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState("");
 const [roomId, setRoomId] = useState(() =>
   getStoredValue(STORAGE_KEYS.roomId, import.meta.env.VITE_ROOM_ID ?? "")
 );
+
+const [speakerName, setSpeakerName] = useState("");
 
 const audioContextRef = useRef<AudioContext | null>(null);
 const processorRef = useRef<ScriptProcessorNode | null>(null);
@@ -364,6 +367,7 @@ socket.onerror = () => {
 
       if (data.type === "overlay_translation") {
   setRoomStatus("Receiving Discord translation");
+  setSpeakerName(String(data.speakerName ?? ""));
 
   setOriginal(String(data.original ?? ""));
   setTranslated(String(data.translated ?? ""));
@@ -375,6 +379,7 @@ socket.onerror = () => {
   clearTimerRef.current = window.setTimeout(() => {
     setOriginal("");
     setTranslated("");
+    setSpeakerName("");
     setRoomStatus(roomId ? `Room joined: ${roomId}` : "Room not joined");
   }, 5000);
 }
@@ -654,6 +659,7 @@ async function loadAudioDevices() {
       )}
 
       <section className={translated ? "subtitleHud active" : "subtitleHud idle"}>
+        {speakerName && <p className="hudSpeaker">{speakerName}</p>}
         {original && <p className="hudOriginal">{original}</p>}
 
         {translated ? (

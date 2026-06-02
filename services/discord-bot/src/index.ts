@@ -77,11 +77,14 @@ function createPocketWaveApiSocket(
         parsed.translated
       );
       if (socket.readyState === WebSocket.OPEN) {
+        const speakerName = await getSpeakerName(interaction, userId);
+
   socket.send(
     JSON.stringify({
       type: "room_translation",
       roomId: interaction.guildId,
       userId,
+      speakerName,
       original: parsed.original,
       translated: parsed.translated,
     })
@@ -243,6 +246,26 @@ function convertDiscordPcmToDeepgramPcm(chunk: Buffer) {
   );
 
   return float32ToInt16Buffer(mono16k);
+}
+
+async function getSpeakerName(interaction: any, userId: string) {
+  try {
+    const member = await interaction.guild?.members.fetch(userId);
+
+    if (member?.displayName) {
+      return member.displayName;
+    }
+  } catch {
+    // fallback below
+  }
+
+  try {
+    const user = await interaction.client.users.fetch(userId);
+
+    return user.displayName || user.username || `User ${userId}`;
+  } catch {
+    return `User ${userId}`;
+  }
 }
 
 if (!token || !clientId || !guildId) {

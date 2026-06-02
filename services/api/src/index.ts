@@ -353,6 +353,7 @@ if (payload.type === "room_translation") {
     type: "overlay_translation",
     roomId,
     userId: payload.userId,
+    speakerName: payload.speakerName,
     original: payload.original,
     translated: payload.translated,
   });
