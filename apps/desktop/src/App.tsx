@@ -166,6 +166,9 @@ const streamRef = useRef<MediaStream | null>(null);
 const isConnectedRef = useRef(false);
 const isListeningRef = useRef(false);
 
+const reconnectTimerRef = useRef<number | null>(null);
+const shouldReconnectRef = useRef(true);
+
   useEffect(() => {
     window.pocketwave?.onClickThroughChange(setClickThrough);
     window.pocketwave?.onMinimalModeChange(setMinimalMode);
@@ -224,16 +227,52 @@ useEffect(() => {
 
   return () => {
     window.clearTimeout(timer);
+
+    shouldReconnectRef.current = false;
+
+    if (reconnectTimerRef.current) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+
+    socketRef.current?.close();
   };
 }, []);
 
-  function connect() {
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-  return;
+function scheduleReconnect() {
+  if (!shouldReconnectRef.current) {
+    return;
+  }
+
+  if (reconnectTimerRef.current) {
+    return;
+  }
+
+  setStatus("Reconnecting...");
+
+  reconnectTimerRef.current = window.setTimeout(() => {
+    reconnectTimerRef.current = null;
+    connect();
+  }, 2000);
 }
+
+  function connect() {
+    if (
+    socketRef.current?.readyState === WebSocket.OPEN ||
+    socketRef.current?.readyState === WebSocket.CONNECTING
+  ) {
+    return;
+  }
+
+  shouldReconnectRef.current = true;
+
     const socket = new WebSocket("ws://localhost:4000/ws");
 
     socket.onopen = () => {
+      if (reconnectTimerRef.current) {
+  window.clearTimeout(reconnectTimerRef.current);
+  reconnectTimerRef.current = null;
+}
   setStatus("Connected");
   setIsConnected(true);
   socketRef.current = socket;
@@ -262,13 +301,14 @@ socket.onclose = () => {
   setIsConnected(false);
   setIsListening(false);
   socketRef.current = null;
+
+  scheduleReconnect();
 };
 
 socket.onerror = () => {
-  setStatus("Error");
+  setStatus("Connection Error");
   setIsConnected(false);
   setIsListening(false);
-  socketRef.current = null;
 };
 
     socket.onmessage = (event) => {
