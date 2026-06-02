@@ -50,6 +50,14 @@ type RoomJoinedMessage = {
   role: string;
 };
 
+type TranslationHistoryItem = {
+  id: string;
+  speakerName: string;
+  original: string;
+  translated: string;
+  createdAt: number;
+};
+
 type ServerMessage =
   | TranscriptMessage
   | TranslationMessage
@@ -190,6 +198,10 @@ const [inputSource, setInputSource] = useState<InputSource>(() => {
 
 const [roomStatus, setRoomStatus] = useState("Room not joined");
 
+const [translationHistory, setTranslationHistory] = useState<
+  TranslationHistoryItem[]
+>([]);
+
   useEffect(() => {
     window.pocketwave?.onClickThroughChange(setClickThrough);
     window.pocketwave?.onMinimalModeChange(setMinimalMode);
@@ -281,6 +293,48 @@ function scheduleReconnect() {
   }, 2000);
 }
 
+function addToTranslationHistory(item: Omit<TranslationHistoryItem, "id" | "createdAt">) {
+  const historyItem: TranslationHistoryItem = {
+    ...item,
+    id: `${Date.now()}-${Math.random()}`,
+    createdAt: Date.now(),
+  };
+
+  setTranslationHistory((prev) => [historyItem, ...prev].slice(0, 3));
+}
+
+function showLiveSubtitle(payload: {
+  speakerName?: string;
+  original: string;
+  translated: string;
+}) {
+  const nextSpeakerName = payload.speakerName ?? "";
+  const nextOriginal = payload.original ?? "";
+  const nextTranslated = payload.translated ?? "";
+
+  setSpeakerName(nextSpeakerName);
+  setOriginal(nextOriginal);
+  setTranslated(nextTranslated);
+
+  addToTranslationHistory({
+    speakerName: nextSpeakerName,
+    original: nextOriginal,
+    translated: nextTranslated,
+  });
+
+  if (clearTimerRef.current) {
+    window.clearTimeout(clearTimerRef.current);
+  }
+
+  clearTimerRef.current = window.setTimeout(() => {
+    setSpeakerName("");
+    setOriginal("");
+    setTranslated("");
+    setRoomStatus(roomId ? `Room joined: ${roomId}` : "Room not joined");
+  }, 6000);
+}
+
+
   function connect() {
     if (
     socketRef.current?.readyState === WebSocket.OPEN ||
@@ -367,36 +421,21 @@ socket.onerror = () => {
 
       if (data.type === "overlay_translation") {
   setRoomStatus("Receiving Discord translation");
-  setSpeakerName(String(data.speakerName ?? ""));
 
-  setOriginal(String(data.original ?? ""));
-  setTranslated(String(data.translated ?? ""));
-
-  if (clearTimerRef.current) {
-    window.clearTimeout(clearTimerRef.current);
-  }
-
-  clearTimerRef.current = window.setTimeout(() => {
-    setOriginal("");
-    setTranslated("");
-    setSpeakerName("");
-    setRoomStatus(roomId ? `Room joined: ${roomId}` : "Room not joined");
-  }, 5000);
+  showLiveSubtitle({
+    speakerName: String(data.speakerName ?? ""),
+    original: String(data.original ?? ""),
+    translated: String(data.translated ?? ""),
+  });
 }
 
       if (data.type === "translation") {
-        setOriginal(data.original);
-        setTranslated(data.translated);
-
-        if (clearTimerRef.current) {
-          window.clearTimeout(clearTimerRef.current);
-        }
-
-        clearTimerRef.current = window.setTimeout(() => {
-          setOriginal("");
-          setTranslated("");
-        }, 5000);
-      }
+  showLiveSubtitle({
+    speakerName: inputSource === "microphone" ? "You" : "",
+    original: data.original,
+    translated: data.translated,
+  });
+}
     };
   }
 
@@ -674,6 +713,22 @@ async function loadAudioDevices() {
           </p>
         )}
       </section>
+      {!minimalMode && translationHistory.length > 0 && (
+  <section className="historyPanel">
+    <div className="historyTitle">Recent translations</div>
+
+    {translationHistory.map((item) => (
+      <div key={item.id} className="historyItem">
+        {item.speakerName && (
+          <div className="historySpeaker">{item.speakerName}</div>
+        )}
+
+        <div className="historyOriginal">{item.original}</div>
+        <div className="historyTranslated">{item.translated}</div>
+      </div>
+    ))}
+  </section>
+)}
     </main>
   );
 }
