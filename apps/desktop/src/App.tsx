@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
+import { config } from "./config";
 
 type InputSource = "discord" | "microphone";
 
@@ -354,7 +355,7 @@ function showLiveSubtitle(payload: {
 
   shouldReconnectRef.current = true;
 
-    const socket = new WebSocket("ws://localhost:4000/ws");
+    const socket = new WebSocket(config.websocketUrl);
 
     socket.onopen = () => {
       if (reconnectTimerRef.current) {
