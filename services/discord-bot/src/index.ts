@@ -16,6 +16,7 @@ import {
 import type { Readable } from "node:stream";
 import WebSocket from "ws";
 import prism from "prism-media";
+import Fastify from "fastify";
 
 const token = process.env.DISCORD_TOKEN;
 const clientId = process.env.DISCORD_CLIENT_ID;
@@ -610,6 +611,20 @@ return;
     await interaction.reply("PocketWave left the voice channel.");
     console.log("Left voice channel");
   }
+});
+
+const healthApp = Fastify();
+
+healthApp.get("/health", async () => {
+  return {
+    status: "ok",
+    service: "pocketwave-discord-bot",
+  };
+});
+
+await healthApp.listen({
+  port: Number(process.env.PORT ?? 4001),
+  host: "0.0.0.0",
 });
 
 await registerCommands();
