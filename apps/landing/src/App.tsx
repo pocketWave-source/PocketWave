@@ -2,6 +2,7 @@ import "./App.css";
 
 const downloadUrl = import.meta.env.VITE_DOWNLOAD_URL || "#";
 const telegramUrl = import.meta.env.VITE_TELEGRAM_URL || "#";
+const discordInviteUrl = import.meta.env.VITE_DISCORD_INVITE_URL || "#";
 
 function App() {
   return (
@@ -32,14 +33,18 @@ function App() {
             </p>
 
             <div className="actions">
-              <a className="primaryBtn" href={downloadUrl} target="_blank" rel="noreferrer">
-                Download for Windows
-              </a>
+  <a className="primaryBtn" href={downloadUrl} target="_blank" rel="noreferrer">
+    Download for Windows
+  </a>
 
-              <a className="secondaryBtn" href={telegramUrl} target="_blank" rel="noreferrer">
-                Join Telegram
-              </a>
-            </div>
+  <a className="secondaryBtn" href={discordInviteUrl} target="_blank" rel="noreferrer">
+    Invite Discord Bot
+  </a>
+
+  <a className="secondaryBtn" href={telegramUrl} target="_blank" rel="noreferrer">
+    Join Telegram
+  </a>
+</div>
 
             <p className="note">
               Early MVP build. Currently optimized for Discord voice channels and Windows overlay.
@@ -104,10 +109,10 @@ function App() {
         </div>
 
         <div className="steps">
-          <div>1. Invite the Discord bot</div>
-          <div>2. Join a voice channel</div>
-          <div>3. Run /transcribe</div>
-          <div>4. Read subtitles while playing</div>
+          <div>1. Download PocketWave Desktop</div>
+<div>2. Invite the Discord bot</div>
+<div>3. Run /setup in your Discord server</div>
+<div>4. Join voice chat and start /transcribe</div>
         </div>
       </section>
 
@@ -122,6 +127,10 @@ function App() {
           <a className="primaryBtn" href={telegramUrl} target="_blank" rel="noreferrer">
             Join Telegram
           </a>
+
+          <a className="secondaryBtn" href={discordInviteUrl} target="_blank" rel="noreferrer">
+    Invite Discord Bot
+  </a>
 
           <a className="secondaryBtn" href={downloadUrl} target="_blank" rel="noreferrer">
             Download MVP
