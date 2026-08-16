@@ -271,9 +271,9 @@ async function getSpeakerName(interaction: any, userId: string) {
   }
 }
 
-if (!token || !clientId || !guildId) {
+if (!token || !clientId) {
   throw new Error(
-    "Missing DISCORD_TOKEN, DISCORD_CLIENT_ID or DISCORD_GUILD_ID"
+    "Missing DISCORD_TOKEN or DISCORD_CLIENT_ID"
   );
 }
 
@@ -338,6 +338,20 @@ const commands = [
     .setDescription("Stop listening to the current voice channel"),
 ].map((command) => command.toJSON());
 
+async function registerGuildCommands(guildId: string) {
+  const rest = new REST({ version: "10" }).setToken(token);
+  try {
+    await rest.put(
+      Routes.applicationGuildCommands(clientId, guildId),
+      { body: commands }
+    );
+
+    console.log(`Registered slash commands for guild ${guildId}`);
+  } catch (error) {
+    console.error(`Failed to register slash commands for guild ${guildId}:`, error);
+  }
+}
+
 async function registerCommands() {
   const rest = new REST({ version: "10" }).setToken(token);
 
@@ -365,8 +379,18 @@ type ActiveTranscriber = {
 
 const activeGuildTranscribers = new Map<string, ActiveTranscriber>();
 
-client.once("ready", () => {
+client.once("ready", async () => {
   console.log(`PocketWave Discord bot logged in as ${client.user?.tag}`);
+
+for (const guild of client.guilds.cache.values()) {
+  await registerGuildCommands(guild.id);
+}
+});
+
+client.on("guildCreate", async (guild) => {
+  console.log(`PocketWave was added to new guild: ${guild.name} (${guild.id})`);
+
+  await registerGuildCommands(guild.id);
 });
 
 client.on("interactionCreate", async (interaction) => {
@@ -479,70 +503,7 @@ if (interaction.commandName === "setup") {
     return;
   }
 
-  if (interaction.commandName === "feedback") {
-  const feedback = interaction.options.getString("message", true).trim();
-
-  if (feedback.length < 5) {
-    await interaction.reply({
-      content: "❌ Feedback is too short. Please write a bit more.",
-      ephemeral: true,
-    });
-    return;
-  }
-
-  if (feedback.length > 1500) {
-    await interaction.reply({
-      content: "❌ Feedback is too long. Please keep it under 1500 characters.",
-      ephemeral: true,
-    });
-    return;
-  }
-
-  const feedbackChannelId = process.env.FEEDBACK_CHANNEL_ID;
-
-  if (!feedbackChannelId) {
-    await interaction.reply({
-      content: "❌ Feedback channel is not configured yet.",
-      ephemeral: true,
-    });
-    return;
-  }
-
-  const feedbackChannel = await interaction.client.channels
-    .fetch(feedbackChannelId)
-    .catch(() => null);
-
-  if (!feedbackChannel || !feedbackChannel.isTextBased()) {
-    await interaction.reply({
-      content: "❌ Feedback channel was not found or is not a text channel.",
-      ephemeral: true,
-    });
-    return;
-  }
-
-  const userTag = interaction.user.tag;
-  const guildName = interaction.guild?.name ?? "Unknown server";
-
-  await feedbackChannel.send({
-    content: [
-      "📝 **New PocketWave Feedback**",
-      "",
-      `**User:** ${userTag}`,
-      `**Server:** ${guildName}`,
-      `**User ID:** \`${interaction.user.id}\``,
-      "",
-      "**Message:**",
-      feedback,
-    ].join("\n"),
-  });
-
-  await interaction.reply({
-    content: "✅ Thanks! Your feedback was sent to the PocketWave team.",
-    ephemeral: true,
-  });
-
-  return;
-}
+  
 
   if (interaction.commandName === "transcribe") {
   if (!interaction.guildId || !interaction.guild) {
