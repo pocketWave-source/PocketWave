@@ -291,6 +291,14 @@ const commands = [
     .setDescription("Leave the current voice channel"),
 
   new SlashCommandBuilder()
+    .setName("setup")
+    .setDescription("Show PocketWave setup instructions"),
+
+  new SlashCommandBuilder()
+    .setName("room")
+    .setDescription("Show this server Room ID for the desktop overlay"),
+
+  new SlashCommandBuilder()
   .setName("transcribe")
   .setDescription("Start listening and translating the current voice channel")
   .addStringOption((option) =>
@@ -360,6 +368,70 @@ client.on("interactionCreate", async (interaction) => {
     await interaction.reply("PocketWave is online ✅");
     return;
   }
+
+  if (interaction.commandName === "room") {
+  if (!interaction.guildId) {
+    await interaction.reply({
+      content: "❌ This command can only be used inside a Discord server.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.reply({
+    content: [
+      "🖥 **PocketWave Room ID**",
+      "",
+      "Use this Room ID inside the PocketWave desktop overlay:",
+      "",
+      `\`${interaction.guildId}\``,
+      "",
+      "Open PocketWave Desktop → select **Discord Voice** → paste this Room ID → Connect.",
+    ].join("\n"),
+    ephemeral: true,
+  });
+
+  return;
+}
+
+if (interaction.commandName === "setup") {
+  if (!interaction.guildId) {
+    await interaction.reply({
+      content: "❌ This command can only be used inside a Discord server.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await interaction.reply({
+    content: [
+      "🎧 **PocketWave Setup**",
+      "",
+      "**1. Download PocketWave Desktop**",
+      "Get the latest Windows build from the PocketWave landing page or GitHub Release.",
+      "",
+      "**2. Open PocketWave Desktop**",
+      "Select **Discord Voice** mode.",
+      "",
+      "**3. Paste this Room ID**",
+      `\`${interaction.guildId}\``,
+      "",
+      "**4. Join a Discord voice channel**",
+      "Then run:",
+      "`/join`",
+      "",
+      "**5. Start translation**",
+      "Example:",
+      "`/transcribe from: English to: Ukrainian mode: Tactical`",
+      "",
+      "**6. Play and read subtitles**",
+      "Translations will appear in Discord text chat and in the PocketWave overlay.",
+    ].join("\n"),
+    ephemeral: true,
+  });
+
+  return;
+}
 
   if (interaction.commandName === "join") {
     if (!interaction.guildId || !interaction.guild) {
