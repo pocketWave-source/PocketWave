@@ -299,6 +299,16 @@ const commands = [
     .setDescription("Show this server Room ID for the desktop overlay"),
 
   new SlashCommandBuilder()
+    .setName("feedback")
+    .setDescription("Send feedback about PocketWave")
+    .addStringOption((option) =>
+      option
+        .setName("message")
+        .setDescription("What should be improved?")
+        .setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
   .setName("transcribe")
   .setDescription("Start listening and translating the current voice channel")
   .addStringOption((option) =>
@@ -468,6 +478,71 @@ if (interaction.commandName === "setup") {
     console.log(`Joined voice channel: ${voiceChannel.name}`);
     return;
   }
+
+  if (interaction.commandName === "feedback") {
+  const feedback = interaction.options.getString("message", true).trim();
+
+  if (feedback.length < 5) {
+    await interaction.reply({
+      content: "❌ Feedback is too short. Please write a bit more.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (feedback.length > 1500) {
+    await interaction.reply({
+      content: "❌ Feedback is too long. Please keep it under 1500 characters.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const feedbackChannelId = process.env.FEEDBACK_CHANNEL_ID;
+
+  if (!feedbackChannelId) {
+    await interaction.reply({
+      content: "❌ Feedback channel is not configured yet.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const feedbackChannel = await interaction.client.channels
+    .fetch(feedbackChannelId)
+    .catch(() => null);
+
+  if (!feedbackChannel || !feedbackChannel.isTextBased()) {
+    await interaction.reply({
+      content: "❌ Feedback channel was not found or is not a text channel.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const userTag = interaction.user.tag;
+  const guildName = interaction.guild?.name ?? "Unknown server";
+
+  await feedbackChannel.send({
+    content: [
+      "📝 **New PocketWave Feedback**",
+      "",
+      `**User:** ${userTag}`,
+      `**Server:** ${guildName}`,
+      `**User ID:** \`${interaction.user.id}\``,
+      "",
+      "**Message:**",
+      feedback,
+    ].join("\n"),
+  });
+
+  await interaction.reply({
+    content: "✅ Thanks! Your feedback was sent to the PocketWave team.",
+    ephemeral: true,
+  });
+
+  return;
+}
 
   if (interaction.commandName === "transcribe") {
   if (!interaction.guildId || !interaction.guild) {
