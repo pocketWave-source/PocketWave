@@ -303,14 +303,28 @@ const commands = [
     .setDescription("Show PocketWave commands and usage"),
 
   new SlashCommandBuilder()
-    .setName("feedback")
-    .setDescription("Send feedback about PocketWave")
-    .addStringOption((option) =>
-      option
-        .setName("message")
-        .setDescription("What should be improved?")
-        .setRequired(true)
-    ),
+  .setName("feedback")
+  .setDescription("Send feedback about PocketWave")
+  .addStringOption((option) =>
+    option
+      .setName("category")
+      .setDescription("Feedback category")
+      .setRequired(true)
+      .addChoices(
+        { name: "Bug", value: "bug" },
+        { name: "Setup", value: "setup" },
+        { name: "Latency", value: "latency" },
+        { name: "Translation", value: "translation" },
+        { name: "Overlay", value: "overlay" },
+        { name: "Idea", value: "idea" }
+      )
+  )
+  .addStringOption((option) =>
+    option
+      .setName("message")
+      .setDescription("What should be improved?")
+      .setRequired(true)
+  ),
 
   new SlashCommandBuilder()
   .setName("transcribe")
@@ -486,11 +500,12 @@ if (interaction.commandName === "help") {
       "`/transcribe` — start voice translation",
       "`/stop` — stop transcription",
       "`/leave` — make the bot leave the voice channel",
-      "`/feedback` — send feedback about PocketWave",
+      "`/feedback` — send categorized feedback about PocketWave",
       "",
       "**Example:**",
       "`/join`",
       "`/transcribe from: English to: Ukrainian mode: Tactical`",
+      "`/feedback category: Latency message: Overlay works, but translation delay is too high`",
       "",
       "**Desktop overlay:**",
       "Use `/room` or `/setup`, copy the Room ID, then paste it into PocketWave Desktop in **Discord Voice** mode.",
@@ -710,6 +725,7 @@ if (interaction.commandName === "feedback") {
   await interaction.deferReply({ ephemeral: true });
 
   try {
+    const category = interaction.options.getString("category", true);
     const feedback = interaction.options.getString("message", true).trim();
 
     if (feedback.length < 5) {
@@ -745,18 +761,19 @@ if (interaction.commandName === "feedback") {
     const guildName = interaction.guild?.name ?? "Unknown server";
 
     await feedbackChannel.send({
-      content: [
-        "📝 **New PocketWave Feedback**",
-        "",
-        `**User:** ${userTag}`,
-        `**Server:** ${guildName}`,
-        `**User ID:** \`${interaction.user.id}\``,
-        "",
-        "**Message:**",
-        feedback,
-      ].join("\n"),
-      allowedMentions: { users: [] },
-    });
+  content: [
+    "📝 **New PocketWave Feedback**",
+    "",
+    `**Category:** \`${category}\``,
+    `**User:** ${userTag}`,
+    `**Server:** ${guildName}`,
+    `**User ID:** \`${interaction.user.id}\``,
+    "",
+    "**Message:**",
+    feedback,
+  ].join("\n"),
+  allowedMentions: { users: [] },
+});
 
     await interaction.editReply("✅ Thanks! Your feedback was sent to the PocketWave team.");
   } catch (error) {
