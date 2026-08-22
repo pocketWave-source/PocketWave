@@ -299,6 +299,10 @@ const commands = [
     .setDescription("Show this server Room ID for the desktop overlay"),
 
   new SlashCommandBuilder()
+    .setName("help")
+    .setDescription("Show PocketWave commands and usage"),
+
+  new SlashCommandBuilder()
     .setName("feedback")
     .setDescription("Send feedback about PocketWave")
     .addStringOption((option) =>
@@ -460,6 +464,39 @@ if (interaction.commandName === "setup") {
       "",
       "**6. Play and read subtitles**",
       "Translations will appear in Discord text chat and in the PocketWave overlay.",
+    ].join("\n"),
+    ephemeral: true,
+  });
+
+  return;
+}
+
+if (interaction.commandName === "help") {
+  await interaction.reply({
+    content: [
+      "🎧 **PocketWave Help**",
+      "",
+      "PocketWave translates Discord voice chat and shows subtitles in the desktop overlay.",
+      "",
+      "**Main commands:**",
+      "",
+      "`/setup` — show setup instructions and Room ID",
+      "`/room` — show this server Room ID for the desktop overlay",
+      "`/join` — make the bot join your current voice channel",
+      "`/transcribe` — start voice translation",
+      "`/stop` — stop transcription",
+      "`/leave` — make the bot leave the voice channel",
+      "`/feedback` — send feedback about PocketWave",
+      "",
+      "**Example:**",
+      "`/join`",
+      "`/transcribe from: English to: Ukrainian mode: Tactical`",
+      "",
+      "**Desktop overlay:**",
+      "Use `/room` or `/setup`, copy the Room ID, then paste it into PocketWave Desktop in **Discord Voice** mode.",
+      "",
+      "**Tip:**",
+      "If commands do not appear right after inviting the bot, wait 1–2 minutes or restart Discord.",
     ].join("\n"),
     ephemeral: true,
   });
