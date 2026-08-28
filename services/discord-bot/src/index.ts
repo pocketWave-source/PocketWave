@@ -268,7 +268,7 @@ function convertDiscordPcmToDeepgramPcm(chunk: Buffer) {
 
 function pairDesktopWithGuild(code: string, guildId: string, guildName: string) {
   return new Promise<void>((resolve, reject) => {
-    const socket = new WebSocket(POCKETWAVE_API_WS_URL);
+    const socket = new WebSocket(apiWsUrl);
 
     const timeout = setTimeout(() => {
       socket.close();
