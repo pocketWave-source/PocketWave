@@ -60,6 +60,12 @@ function createPocketWaveApiSocket(
   const socket = new WebSocket(apiWsUrl);
 
   socket.on("open", () => {
+    socket.send(
+      JSON.stringify({
+        type: "producer_auth",
+        botSecret: POCKETWAVE_BOT_SECRET,
+      })
+    );
     console.log("Connected to PocketWave API WebSocket");
 
     socket.send(

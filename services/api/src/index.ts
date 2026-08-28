@@ -169,6 +169,7 @@ app.get("/health", async () => {
 app.get("/ws", { websocket: true }, (connection) => {
   console.log("Client connected");
 
+  let isTrustedProducer = false;
   let settings: ClientSettings = { ...DEFAULT_SETTINGS };
   let dgSocket: WebSocket | null = null;
   let lastFinalTranscript = "";
@@ -267,23 +268,51 @@ app.get("/ws", { websocket: true }, (connection) => {
 
   connection.on("message", (message, isBinary) => {
     if (isBinary) {
-      if (!dgSocket) {
-        connectDeepgram();
-      }
+  if (!isTrustedProducer) {
+    console.warn("Rejected audio chunk from unauthenticated websocket client");
+    connection.close();
+    return;
+  }
 
-      if (dgSocket?.readyState === WebSocket.OPEN) {
-        dgSocket.send(message);
-      }
+  if (!dgSocket) {
+    connectDeepgram();
+  }
 
-      return;
-    }
+  if (dgSocket?.readyState === WebSocket.OPEN) {
+    dgSocket.send(message);
+  }
+
+  return;
+}
 
     try {
       const payload = JSON.parse(message.toString());
 
+      if (payload.type === "producer_auth") {
+  if (!POCKETWAVE_BOT_SECRET || payload.botSecret !== POCKETWAVE_BOT_SECRET) {
+    console.warn("Rejected producer_auth: invalid bot secret");
+    connection.close();
+    return;
+  }
+
+  isTrustedProducer = true;
+
+  safeSend(connection, {
+    type: "producer_auth_ok",
+  });
+
+  return;
+}
+
       if (payload.type === "settings") {
         const incomingMode =
     payload.mode === "tactical" ? "tactical" : DEFAULT_SETTINGS.mode;
+
+    if (!isTrustedProducer) {
+  console.warn("Rejected settings from unauthenticated websocket client");
+  connection.close();
+  return;
+}
 
   settings = {
     sourceLanguage: payload.sourceLanguage ?? DEFAULT_SETTINGS.sourceLanguage,
@@ -307,6 +336,12 @@ app.get("/ws", { websocket: true }, (connection) => {
 
       if (payload.type === "finalize") {
   console.log("Finalize requested");
+
+  if (!isTrustedProducer) {
+  console.warn("Rejected settings from unauthenticated websocket client");
+  connection.close();
+  return;
+}
 
   if (dgSocket?.readyState === WebSocket.OPEN) {
     dgSocket.send(
@@ -346,6 +381,14 @@ app.get("/ws", { websocket: true }, (connection) => {
 
 if (payload.type === "room_translation") {
   const roomId = String(payload.roomId ?? "");
+  if (!POCKETWAVE_BOT_SECRET || payload.botSecret !== POCKETWAVE_BOT_SECRET) {
+    console.warn("Rejected room_translation: invalid bot secret", {
+      roomId: payload.roomId,
+      userId: payload.userId,
+    });
+
+    return;
+  }
 
   if (!roomId) {
     safeSend(connection, {
