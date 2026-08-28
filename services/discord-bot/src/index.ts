@@ -5,6 +5,7 @@ import {
   GatewayIntentBits,
   REST,
   Routes,
+  PermissionFlagsBits,
   SlashCommandBuilder,
 } from "discord.js";
 import {
@@ -375,6 +376,92 @@ async function registerGuildCommands(guildId: string) {
   }
 }
 
+async function findWritableTextChannel(guild: any) {
+  const me = guild.members.me ?? (await guild.members.fetchMe().catch(() => null));
+
+  if (!me) {
+    return null;
+  }
+
+  const canSend = (channel: any) => {
+    if (!channel) return false;
+    if (!channel.isTextBased?.()) return false;
+    if (channel.isDMBased?.()) return false;
+    if (!channel.permissionsFor) return false;
+
+    const permissions = channel.permissionsFor(me);
+
+    return (
+      permissions?.has(PermissionFlagsBits.ViewChannel) &&
+      permissions?.has(PermissionFlagsBits.SendMessages)
+    );
+  };
+
+  if (guild.systemChannel && canSend(guild.systemChannel)) {
+    return guild.systemChannel;
+  }
+
+  const channels = await guild.channels.fetch().catch(() => null);
+
+  if (!channels) {
+    return null;
+  }
+
+  for (const [, channel] of channels) {
+    if (canSend(channel)) {
+      return channel;
+    }
+  }
+
+  return null;
+}
+
+async function sendGuildWelcomeMessage(guild: any) {
+  const channel = await findWritableTextChannel(guild);
+
+  if (!channel) {
+    console.log(`No writable text channel found for guild ${guild.name} (${guild.id})`);
+    return;
+  }
+
+  const landingUrl = process.env.POCKETWAVE_LANDING_URL;
+  const downloadUrl = process.env.POCKETWAVE_DOWNLOAD_URL;
+  const telegramUrl = process.env.POCKETWAVE_TELEGRAM_URL;
+
+  await channel
+    .send({
+      content: [
+        "🎧 **Thanks for inviting PocketWave!**",
+        "",
+        "PocketWave translates Discord voice chat and shows subtitles in the desktop overlay.",
+        "",
+        "**Start here:**",
+        "`/setup` — setup guide and Room ID",
+        "`/help` — list of commands",
+        "`/links` — useful PocketWave links",
+        "",
+        "**Basic flow:**",
+        "1. Download PocketWave Desktop",
+        "2. Run `/setup` and copy Room ID",
+        "3. Join a voice channel",
+        "4. Run `/join`",
+        "5. Run `/transcribe`",
+        "",
+        landingUrl ? `🌊 Landing: ${landingUrl}` : null,
+        downloadUrl ? `🖥 Download: ${downloadUrl}` : null,
+        telegramUrl ? `📢 Telegram: ${telegramUrl}` : null,
+        "",
+        "If commands do not appear immediately, wait 1–2 minutes or restart Discord.",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      allowedMentions: { parse: [] },
+    })
+    .catch((error: any) => {
+      console.error(`Failed to send welcome message to guild ${guild.id}:`, error);
+    });
+}
+
 async function registerCommands() {
   const rest = new REST({ version: "10" }).setToken(token);
 
@@ -414,6 +501,7 @@ client.on("guildCreate", async (guild) => {
   console.log(`PocketWave was added to new guild: ${guild.name} (${guild.id})`);
 
   await registerGuildCommands(guild.id);
+  await sendGuildWelcomeMessage(guild);
 });
 
 client.on("interactionCreate", async (interaction) => {
