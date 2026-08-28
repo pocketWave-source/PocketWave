@@ -303,6 +303,10 @@ const commands = [
     .setDescription("Show PocketWave commands and usage"),
 
   new SlashCommandBuilder()
+    .setName("links")
+    .setDescription("Show useful PocketWave links"),
+
+  new SlashCommandBuilder()
   .setName("feedback")
   .setDescription("Send feedback about PocketWave")
   .addStringOption((option) =>
@@ -501,6 +505,7 @@ if (interaction.commandName === "help") {
       "`/stop` — stop transcription",
       "`/leave` — make the bot leave the voice channel",
       "`/feedback` — send categorized feedback about PocketWave",
+      "`/links` — show landing, download, Telegram and bot invite links",
       "",
       "**Example:**",
       "`/join`",
@@ -783,6 +788,31 @@ if (interaction.commandName === "feedback") {
       "❌ Something went wrong while sending feedback. Please try again later."
     );
   }
+
+  return;
+}
+
+if (interaction.commandName === "links") {
+  const landingUrl = process.env.POCKETWAVE_LANDING_URL;
+  const downloadUrl = process.env.POCKETWAVE_DOWNLOAD_URL;
+  const telegramUrl = process.env.POCKETWAVE_TELEGRAM_URL;
+  const inviteUrl = process.env.POCKETWAVE_DISCORD_INVITE_URL;
+
+  await interaction.reply({
+    content: [
+      "🔗 **PocketWave Links**",
+      "",
+      landingUrl ? `🌊 **Landing page:** ${landingUrl}` : null,
+      downloadUrl ? `🖥 **Download Desktop:** ${downloadUrl}` : null,
+      telegramUrl ? `📢 **Telegram:** ${telegramUrl}` : null,
+      inviteUrl ? `🤖 **Invite Discord Bot:** ${inviteUrl}` : null,
+      "",
+      "Use `/setup` to get your Room ID and start the desktop overlay.",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    ephemeral: true,
+  });
 
   return;
 }
