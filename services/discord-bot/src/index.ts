@@ -23,6 +23,7 @@ const clientId = process.env.DISCORD_CLIENT_ID;
 const guildId = process.env.DISCORD_GUILD_ID;
 
 const apiWsUrl = process.env.POCKETWAVE_API_WS_URL ?? "ws://api:4000/ws";
+const POCKETWAVE_VERSION = process.env.POCKETWAVE_VERSION ?? "dev";
 
 const languages = [
   { name: "English", value: "en" },
@@ -402,7 +403,7 @@ type ActiveTranscriber = {
 const activeGuildTranscribers = new Map<string, ActiveTranscriber>();
 
 client.once("ready", async () => {
-  console.log(`PocketWave Discord bot logged in as ${client.user?.tag}`);
+  console.log(`PocketWave Discord bot ${POCKETWAVE_VERSION} logged in as ${client.user?.tag}`);
 
 for (const guild of client.guilds.cache.values()) {
   await registerGuildCommands(guild.id);
@@ -462,6 +463,7 @@ if (interaction.commandName === "setup") {
   await interaction.reply({
     content: [
       "🎧 **PocketWave Setup**",
+      `Version: \`${POCKETWAVE_VERSION}\``,
       "",
       "**1. Download PocketWave Desktop**",
       "Get the latest Windows build from the PocketWave landing page or GitHub Release.",
@@ -493,6 +495,7 @@ if (interaction.commandName === "help") {
   await interaction.reply({
     content: [
       "🎧 **PocketWave Help**",
+      `Version: \`${POCKETWAVE_VERSION}\``,
       "",
       "PocketWave translates Discord voice chat and shows subtitles in the desktop overlay.",
       "",
@@ -801,6 +804,7 @@ if (interaction.commandName === "links") {
   await interaction.reply({
     content: [
       "🔗 **PocketWave Links**",
+      `Version: \`${POCKETWAVE_VERSION}\``,
       "",
       landingUrl ? `🌊 **Landing page:** ${landingUrl}` : null,
       downloadUrl ? `🖥 **Download Desktop:** ${downloadUrl}` : null,
