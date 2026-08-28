@@ -4,6 +4,12 @@ import websocket from "@fastify/websocket";
 import WebSocket from "ws";
 import OpenAI from "openai";
 
+const POCKETWAVE_BOT_SECRET = process.env.POCKETWAVE_BOT_SECRET;
+
+if (!POCKETWAVE_BOT_SECRET) {
+  console.warn("POCKETWAVE_BOT_SECRET is not configured. Room relay is not protected.");
+}
+
 const app = Fastify({
   logger: true,
 });

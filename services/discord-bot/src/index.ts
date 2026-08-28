@@ -26,6 +26,12 @@ const guildId = process.env.DISCORD_GUILD_ID;
 const apiWsUrl = process.env.POCKETWAVE_API_WS_URL ?? "ws://api:4000/ws";
 const POCKETWAVE_VERSION = process.env.POCKETWAVE_VERSION ?? "dev";
 
+const POCKETWAVE_BOT_SECRET = process.env.POCKETWAVE_BOT_SECRET;
+
+if (!POCKETWAVE_BOT_SECRET) {
+  console.warn("POCKETWAVE_BOT_SECRET is not configured. API room relay may reject messages.");
+}
+
 const languages = [
   { name: "English", value: "en" },
   { name: "Ukrainian", value: "uk" },
@@ -85,6 +91,7 @@ function createPocketWaveApiSocket(
   socket.send(
     JSON.stringify({
       type: "room_translation",
+      botSecret: POCKETWAVE_BOT_SECRET,
       roomId: interaction.guildId,
       userId,
       speakerName,
