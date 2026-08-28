@@ -10,6 +10,14 @@ if (!POCKETWAVE_BOT_SECRET) {
   console.warn("POCKETWAVE_BOT_SECRET is not configured. Room relay is not protected.");
 }
 
+const MAX_PRODUCER_SESSION_MS = Number(
+  process.env.MAX_PRODUCER_SESSION_MS ?? 30 * 60 * 1000
+);
+
+const PRODUCER_IDLE_TIMEOUT_MS = Number(
+  process.env.PRODUCER_IDLE_TIMEOUT_MS ?? 60 * 1000
+);
+
 const app = Fastify({
   logger: true,
 });
@@ -173,6 +181,61 @@ app.get("/ws", { websocket: true }, (connection) => {
   let settings: ClientSettings = { ...DEFAULT_SETTINGS };
   let dgSocket: WebSocket | null = null;
   let lastFinalTranscript = "";
+    let producerStartedAt: number | null = null;
+  let maxProducerTimer: NodeJS.Timeout | null = null;
+  let idleProducerTimer: NodeJS.Timeout | null = null;
+
+  function cleanupProducerTimers() {
+    if (maxProducerTimer) {
+      clearTimeout(maxProducerTimer);
+      maxProducerTimer = null;
+    }
+
+    if (idleProducerTimer) {
+      clearTimeout(idleProducerTimer);
+      idleProducerTimer = null;
+    }
+  }
+
+  function closeProducer(reason: string) {
+    console.warn("Closing producer websocket:", reason);
+
+    safeSend(connection, {
+      type: "producer_closed",
+      reason,
+    });
+
+    cleanupProducerTimers();
+
+    if (dgSocket) {
+      dgSocket.close();
+      dgSocket = null;
+    }
+
+    connection.close();
+  }
+
+  function startProducerSessionIfNeeded() {
+    if (producerStartedAt) {
+      return;
+    }
+
+    producerStartedAt = Date.now();
+
+    maxProducerTimer = setTimeout(() => {
+      closeProducer("max_session_time_reached");
+    }, MAX_PRODUCER_SESSION_MS);
+  }
+
+  function resetProducerIdleTimer() {
+    if (idleProducerTimer) {
+      clearTimeout(idleProducerTimer);
+    }
+
+    idleProducerTimer = setTimeout(() => {
+      closeProducer("audio_idle_timeout");
+    }, PRODUCER_IDLE_TIMEOUT_MS);
+  }
 
   function connectDeepgram() {
     if (dgSocket) {
@@ -274,6 +337,9 @@ app.get("/ws", { websocket: true }, (connection) => {
     return;
   }
 
+  startProducerSessionIfNeeded();
+  resetProducerIdleTimer();
+
   if (!dgSocket) {
     connectDeepgram();
   }
@@ -323,6 +389,8 @@ app.get("/ws", { websocket: true }, (connection) => {
         console.log("Settings updated:", settings);
 
         connectDeepgram();
+        startProducerSessionIfNeeded();
+resetProducerIdleTimer();
 
         safeSend(connection, {
           type: "settings_applied",
@@ -416,14 +484,16 @@ if (payload.type === "room_translation") {
   });
 
   connection.on("close", () => {
-    console.log("Client disconnected");
+  console.log("Client disconnected");
 
-    leaveAllRooms(connection);
+  cleanupProducerTimers();
+  leaveAllRooms(connection);
 
-    if (dgSocket) {
-      dgSocket.close();
-    }
-  });
+  if (dgSocket) {
+    dgSocket.close();
+    dgSocket = null;
+  }
+});
 });
 
 await app.listen({
