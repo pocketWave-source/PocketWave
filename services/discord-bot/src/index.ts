@@ -266,6 +266,69 @@ function convertDiscordPcmToDeepgramPcm(chunk: Buffer) {
   return float32ToInt16Buffer(mono16k);
 }
 
+function pairDesktopWithGuild(code: string, guildId: string, guildName: string) {
+  return new Promise<void>((resolve, reject) => {
+    const socket = new WebSocket(POCKETWAVE_API_WS_URL);
+
+    const timeout = setTimeout(() => {
+      socket.close();
+      reject(new Error("Pairing request timed out"));
+    }, 7000);
+
+    function finish(error?: Error) {
+      clearTimeout(timeout);
+
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.close();
+      }
+
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    }
+
+    socket.on("open", () => {
+      socket.send(
+        JSON.stringify({
+          type: "pair_room",
+          botSecret: POCKETWAVE_BOT_SECRET,
+          code: code.trim().toUpperCase(),
+          roomId: guildId,
+          guildName,
+        })
+      );
+    });
+
+    socket.on("message", (data) => {
+      try {
+        const payload = JSON.parse(data.toString());
+
+        if (payload.type === "pairing_ok") {
+          finish();
+          return;
+        }
+
+        if (payload.type === "pairing_failed") {
+          finish(new Error(payload.reason ?? "Pairing failed"));
+          return;
+        }
+
+        if (payload.type === "error") {
+          finish(new Error(payload.message ?? "API error"));
+        }
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error("Invalid API response"));
+      }
+    });
+
+    socket.on("error", (error) => {
+      finish(error instanceof Error ? error : new Error("Pairing socket error"));
+    });
+  });
+}
+
 async function getSpeakerName(interaction: any, userId: string) {
   try {
     const member = await interaction.guild?.members.fetch(userId);
@@ -320,6 +383,16 @@ const commands = [
   new SlashCommandBuilder()
     .setName("links")
     .setDescription("Show useful PocketWave links"),
+
+  new SlashCommandBuilder()
+    .setName("pair")
+    .setDescription("Pair PocketWave Desktop with this Discord server")
+    .addStringOption((option) =>
+      option
+        .setName("code")
+        .setDescription("Pairing code shown in PocketWave Desktop")
+        .setRequired(true)
+    ),
 
   new SlashCommandBuilder()
   .setName("feedback")
@@ -575,6 +648,7 @@ if (interaction.commandName === "setup") {
       "**3. Paste this Room ID**",
       `\`${interaction.guildId}\``,
       "",
+      "Or use `/pair code: YOUR_CODE` to connect Desktop automatically.",
       "**4. Join a Discord voice channel**",
       "Then run:",
       "`/join`",
@@ -592,6 +666,56 @@ if (interaction.commandName === "setup") {
   return;
 }
 
+if (interaction.commandName === "pair") {
+  await interaction.deferReply({ ephemeral: true });
+
+  if (!interaction.guildId) {
+    await interaction.editReply("❌ This command can only be used inside a Discord server.");
+    return;
+  }
+
+  const code = interaction.options.getString("code", true).trim().toUpperCase();
+
+  if (code.length < 4 || code.length > 12) {
+    await interaction.editReply("❌ Invalid pairing code.");
+    return;
+  }
+
+  try {
+    await pairDesktopWithGuild(
+      code,
+      interaction.guildId,
+      interaction.guild?.name ?? "Unknown server"
+    );
+
+    await interaction.editReply([
+      "✅ **PocketWave Desktop paired successfully!**",
+      "",
+      "Your desktop overlay is now connected to this Discord server.",
+      "",
+      "Next:",
+      "`/join`",
+      "`/transcribe from: English to: Ukrainian mode: Tactical`",
+    ].join("\n"));
+  } catch (error) {
+    console.error("Pair command failed:", error);
+
+    await interaction.editReply([
+      "❌ Pairing failed.",
+      "",
+      "Possible reasons:",
+      "- the code is wrong",
+      "- the code expired",
+      "- PocketWave Desktop is not connected",
+      "- API is sleeping or unavailable",
+      "",
+      "Generate a new code in PocketWave Desktop and try again.",
+    ].join("\n"));
+  }
+
+  return;
+}
+
 if (interaction.commandName === "help") {
   await interaction.reply({
     content: [
@@ -603,6 +727,7 @@ if (interaction.commandName === "help") {
       "**Main commands:**",
       "",
       "`/setup` — show setup instructions and Room ID",
+      "`/pair` — pair PocketWave Desktop with this Discord server using a pairing code",
       "`/room` — show this server Room ID for the desktop overlay",
       "`/join` — make the bot join your current voice channel",
       "`/transcribe` — start voice translation",

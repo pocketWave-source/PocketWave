@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import WebSocket from "ws";
 import OpenAI from "openai";
+import crypto from "node:crypto";
 
 const POCKETWAVE_BOT_SECRET = process.env.POCKETWAVE_BOT_SECRET;
 
@@ -34,6 +35,87 @@ type RoomClient = {
 };
 
 const rooms = new Map<string, Set<RoomClient>>();
+
+const PAIRING_TTL_MS = Number(process.env.PAIRING_TTL_MS ?? 10 * 60 * 1000);
+
+type PairingSession = {
+  code: string;
+  socket: WebSocket;
+  expiresAt: number;
+  timer: NodeJS.Timeout;
+};
+
+const pairingSessions = new Map<string, PairingSession>();
+
+function generatePairingCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+
+  for (let i = 0; i < 6; i++) {
+    code += alphabet[crypto.randomInt(0, alphabet.length)];
+  }
+
+  return code;
+}
+
+function createPairingSession(socket: WebSocket) {
+  let code = generatePairingCode();
+
+  while (pairingSessions.has(code)) {
+    code = generatePairingCode();
+  }
+
+  const timer = setTimeout(() => {
+    pairingSessions.delete(code);
+
+    safeSend(socket, {
+      type: "pairing_expired",
+      code,
+    });
+  }, PAIRING_TTL_MS);
+
+  const session: PairingSession = {
+    code,
+    socket,
+    expiresAt: Date.now() + PAIRING_TTL_MS,
+    timer,
+  };
+
+  pairingSessions.set(code, session);
+
+  return session;
+}
+
+function consumePairingSession(code: string) {
+  const normalizedCode = code.trim().toUpperCase();
+  const session = pairingSessions.get(normalizedCode);
+
+  if (!session) {
+    return null;
+  }
+
+  pairingSessions.delete(normalizedCode);
+  clearTimeout(session.timer);
+
+  if (session.expiresAt < Date.now()) {
+    return null;
+  }
+
+  if (session.socket.readyState !== WebSocket.OPEN) {
+    return null;
+  }
+
+  return session;
+}
+
+function removePairingSessionsForSocket(socket: WebSocket) {
+  for (const [code, session] of pairingSessions.entries()) {
+    if (session.socket === socket) {
+      clearTimeout(session.timer);
+      pairingSessions.delete(code);
+    }
+  }
+}
 
 function joinRoom(roomId: string, client: RoomClient) {
   let room = rooms.get(roomId);
@@ -354,6 +436,80 @@ app.get("/ws", { websocket: true }, (connection) => {
     try {
       const payload = JSON.parse(message.toString());
 
+      if (payload.type === "create_pairing") {
+  const session = createPairingSession(connection);
+
+  safeSend(connection, {
+    type: "pairing_created",
+    code: session.code,
+    expiresInMs: PAIRING_TTL_MS,
+  });
+
+  return;
+}
+
+if (payload.type === "pair_room") {
+  if (!POCKETWAVE_BOT_SECRET || payload.botSecret !== POCKETWAVE_BOT_SECRET) {
+    console.warn("Rejected pair_room: invalid bot secret", {
+      code: payload.code,
+      roomId: payload.roomId,
+    });
+
+    safeSend(connection, {
+      type: "error",
+      message: "Invalid bot secret",
+    });
+
+    return;
+  }
+
+  const code = String(payload.code ?? "");
+  const roomId = String(payload.roomId ?? "");
+  const guildName = String(payload.guildName ?? "");
+
+  if (!code || !roomId) {
+    safeSend(connection, {
+      type: "error",
+      message: "code and roomId are required",
+    });
+
+    return;
+  }
+
+  const session = consumePairingSession(code);
+
+  if (!session) {
+    safeSend(connection, {
+      type: "pairing_failed",
+      reason: "invalid_or_expired_code",
+    });
+
+    return;
+  }
+
+  leaveAllRooms(session.socket);
+
+  joinRoom(roomId, {
+    socket: session.socket,
+    role: "viewer",
+  });
+
+  safeSend(session.socket, {
+    type: "paired_room",
+    roomId,
+    guildName,
+  });
+
+  safeSend(connection, {
+    type: "pairing_ok",
+    roomId,
+    code: code.trim().toUpperCase(),
+  });
+
+  console.log(`Paired desktop code ${code} with room ${roomId} (${guildName})`);
+
+  return;
+}
       if (payload.type === "producer_auth") {
   if (!POCKETWAVE_BOT_SECRET || payload.botSecret !== POCKETWAVE_BOT_SECRET) {
     console.warn("Rejected producer_auth: invalid bot secret");
@@ -487,6 +643,7 @@ if (payload.type === "room_translation") {
   console.log("Client disconnected");
 
   cleanupProducerTimers();
+  removePairingSessionsForSocket(connection);
   leaveAllRooms(connection);
 
   if (dgSocket) {
