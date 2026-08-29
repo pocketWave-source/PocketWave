@@ -383,12 +383,14 @@ button:disabled {
 
 .modeBadge {
   display: inline-flex;
+  justify-content: center;
+  align-items: center;
   margin-bottom: 8px;
-  padding: 4px 9px;
+  padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid rgba(150, 230, 255, 0.28);
-  background: rgba(6, 12, 28, 0.48);
-  color: rgba(210, 235, 255, 0.78);
+  background: rgba(6, 12, 28, 0.52);
+  color: rgba(210, 235, 255, 0.82);
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
@@ -396,9 +398,9 @@ button:disabled {
 }
 
 .modeBadge.tactical {
-  border-color: rgba(0, 230, 255, 0.55);
-  color: rgba(125, 235, 255, 0.95);
-  box-shadow: 0 0 18px rgba(0, 210, 255, 0.22);
+  border-color: rgba(0, 230, 255, 0.65);
+  color: rgba(125, 235, 255, 0.98);
+  box-shadow: 0 0 18px rgba(0, 210, 255, 0.25);
 }
 
 .historyMode {
@@ -416,4 +418,68 @@ button:disabled {
 
 .historyMode.tactical {
   color: rgba(125, 235, 255, 0.95);
+}
+
+.pairingBox {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.74);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+}
+
+.pairingTitle {
+  font-size: 13px;
+  font-weight: 800;
+  color: #e2e8f0;
+  margin-bottom: 10px;
+}
+
+.pairingButton {
+  width: 100%;
+  border: 1px solid rgba(56, 189, 248, 0.36);
+  border-radius: 12px;
+  padding: 9px 10px;
+  background: rgba(14, 165, 233, 0.16);
+  color: #e0f2fe;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.pairingButton:hover {
+  background: rgba(14, 165, 233, 0.24);
+}
+
+.pairingCodeBox {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.pairingLabel {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.pairingCommand {
+  font-size: 13px;
+  font-weight: 900;
+  color: #7dd3fc;
+  word-break: break-all;
+}
+
+.pairingStatus {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.pairedGuild {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #86efac;
 }

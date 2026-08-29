@@ -183,6 +183,11 @@ const [roomId, setRoomId] = useState(() =>
 );
 
 const [speakerName, setSpeakerName] = useState("");
+const [pairingCode, setPairingCode] = useState("");
+const [pairingStatus, setPairingStatus] = useState("");
+const [pairedGuildName, setPairedGuildName] = useState("");
+
+const pairingExpireTimerRef = useRef<number | null>(null);
 
 const audioContextRef = useRef<AudioContext | null>(null);
 const processorRef = useRef<ScriptProcessorNode | null>(null);
@@ -298,6 +303,144 @@ function scheduleReconnect() {
   }, 2000);
 }
 
+function handleSocketMessage(payload: any) {
+  if (payload.type === "pairing_created") {
+    setPairingCode(payload.code);
+    setPairingStatus("Use this code in Discord with /pair");
+
+    if (pairingExpireTimerRef.current) {
+      window.clearTimeout(pairingExpireTimerRef.current);
+    }
+
+    pairingExpireTimerRef.current = window.setTimeout(() => {
+      setPairingCode("");
+      setPairingStatus("Pairing code expired. Generate a new one.");
+    }, payload.expiresInMs ?? 10 * 60 * 1000);
+
+    return;
+  }
+
+  if (payload.type === "pairing_expired") {
+    setPairingCode("");
+    setPairingStatus("Pairing code expired. Generate a new one.");
+    return;
+  }
+
+  if (payload.type === "paired_room") {
+    const nextRoomId = String(payload.roomId ?? "");
+    const guildName = String(payload.guildName ?? "");
+
+    setRoomId(nextRoomId);
+    setPairedGuildName(guildName);
+    setPairingCode("");
+    setPairingStatus(`Paired with ${guildName || "Discord server"}`);
+
+    localStorage.setItem("pocketwave.roomId", nextRoomId);
+
+    if (pairingExpireTimerRef.current) {
+      window.clearTimeout(pairingExpireTimerRef.current);
+      pairingExpireTimerRef.current = null;
+    }
+
+    setRoomStatus("Room paired");
+
+    return;
+  }
+
+  if (payload.type === "room_joined") {
+    setRoomStatus("Room joined");
+    return;
+  }
+
+  if (payload.type === "settings_applied") {
+  console.log("Settings applied:", payload);
+  return;
+}
+
+if (payload.type === "stt_ready") {
+  console.log("STT ready:", payload);
+  return;
+}
+
+if (payload.type === "transcript") {
+  setOriginal(payload.text);
+  return;
+}
+
+if (payload.type === "translation") {
+  showLiveSubtitle({
+    speakerName: inputSource === "microphone" ? "You" : "",
+    original: payload.original,
+    translated: payload.translated,
+    mode: payload.mode ?? "normal",
+  });
+}
+
+  if (payload.type === "overlay_translation") {
+    showLiveSubtitle({
+      speakerName: payload.speakerName ?? "Unknown",
+      original: payload.original ?? "",
+      translated: payload.translated ?? "",
+      mode: payload.mode ?? "normal",
+    });
+
+    setStatus("Receiving Discord translation");
+    return;
+  }
+
+  if (payload.type === "error") {
+    setStatus(payload.message ?? "API error");
+    return;
+  }
+}
+
+function requestPairingCode() {
+  setInputSource("discord");
+  setPairingStatus("Creating pairing code...");
+  setPairingCode("");
+
+  const existingSocket = socketRef.current;
+
+  if (existingSocket && existingSocket.readyState === WebSocket.OPEN) {
+    existingSocket.send(
+      JSON.stringify({
+        type: "create_pairing",
+      })
+    );
+
+    return;
+  }
+
+  const socket = new WebSocket(config.websocketUrl);
+  socketRef.current = socket;
+  setIsConnected(true);
+
+  socket.onopen = () => {
+    setStatus("Connected for pairing");
+
+    socket.send(
+      JSON.stringify({
+        type: "create_pairing",
+      })
+    );
+  };
+
+  socket.onmessage = (event) => {
+    const payload = JSON.parse(event.data);
+
+    handleSocketMessage(payload);
+  };
+
+  socket.onerror = () => {
+    setPairingStatus("Pairing connection error");
+    setStatus("Connection error");
+  };
+
+  socket.onclose = () => {
+    setStatus("Disconnected");
+  };
+}
+
 function addToTranslationHistory(item: Omit<TranslationHistoryItem, "id" | "createdAt">) {
   const historyItem: TranslationHistoryItem = {
     ...item,
@@ -376,10 +519,9 @@ function showLiveSubtitle(payload: {
       role: "viewer",
     })
   );
-} else if (inputSource === "discord" && !roomId) {
-  setRoomStatus("Room ID is missing");
 }
 
+if (inputSource === "microphone") {
   socket.send(
     JSON.stringify({
       type: "settings",
@@ -387,7 +529,9 @@ function showLiveSubtitle(payload: {
       targetLanguage,
     })
   );
-};
+}
+
+}; // closes socket.onopen
 
 socket.onclose = () => {
   setStatus("Disconnected");
@@ -407,48 +551,9 @@ socket.onerror = () => {
 };
 
     socket.onmessage = (event) => {
-      const data = JSON.parse(event.data) as ServerMessage;
-
-      if (data.type === "settings_applied") {
-        console.log("Settings applied:", data);
-      }
-
-      if (data.type === "stt_ready") {
-        console.log("STT ready:", data);
-      }
-
-      if (data.type === "error") {
-        setTranslated(data.message);
-      }
-
-      if (data.type === "transcript") {
-        setOriginal(data.text);
-      }
-
-      if (data.type === "room_joined") {
-  setRoomStatus(`Room joined: ${data.roomId}`);
-}
-
-      if (data.type === "overlay_translation") {
-  setRoomStatus("Receiving Discord translation");
-
-  showLiveSubtitle({
-    speakerName: String(data.speakerName ?? ""),
-    original: String(data.original ?? ""),
-    translated: String(data.translated ?? ""),
-    mode: data.mode ?? "normal",
-  });
-}
-
-      if (data.type === "translation") {
-  showLiveSubtitle({
-    speakerName: inputSource === "microphone" ? "You" : "",
-    original: data.original,
-    translated: data.translated,
-    mode: data.mode ?? "normal",
-  });
-}
-    };
+  const payload = JSON.parse(event.data);
+  handleSocketMessage(payload);
+};
   }
 
   async function startRecording() {
@@ -657,6 +762,37 @@ async function loadAudioDevices() {
     />
   </label>
 </div>
+)}
+
+{inputSource === "discord" && (
+  <div className="pairingBox">
+    <div className="pairingTitle">Pair with Discord</div>
+
+    <button
+      type="button"
+      className="pairingButton"
+      onClick={requestPairingCode}
+    >
+      Generate Pairing Code
+    </button>
+
+    {pairingCode && (
+      <div className="pairingCodeBox">
+        <div className="pairingLabel">Use in Discord:</div>
+        <div className="pairingCommand">/pair code: {pairingCode}</div>
+      </div>
+    )}
+
+    {pairingStatus && (
+      <div className="pairingStatus">{pairingStatus}</div>
+    )}
+
+    {pairedGuildName && (
+      <div className="pairedGuild">
+        Connected to: <strong>{pairedGuildName}</strong>
+      </div>
+    )}
+  </div>
 )}
 
 {inputSource === "microphone" && (
