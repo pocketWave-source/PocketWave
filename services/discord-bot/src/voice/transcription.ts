@@ -30,6 +30,16 @@ type PocketWaveApiMessage =
       [key: string]: unknown;
     };
 
+function isTranslationMessage(
+  msg: PocketWaveApiMessage
+): msg is { type: "translation"; original: string; translated: string; mode?: "normal" | "tactical" } {
+  return (
+    msg.type === "translation" &&
+    typeof (msg as any).original === "string" &&
+    typeof (msg as any).translated === "string"
+  );
+}
+
 async function getSpeakerName(
   interaction: ChatInputCommandInteraction,
   userId: string
@@ -72,7 +82,9 @@ async function sendTranslationToDiscord(
   original: string,
   translated: string
 ) {
-  if (!interaction.channel || !interaction.channel.isTextBased()) {
+  const channel = interaction.channel;
+
+  if (!channel || !channel.isTextBased() || !("send" in channel)) {
     return;
   }
 
@@ -98,7 +110,7 @@ async function sendTranslationToDiscord(
 
   lastTranslationByGuild.set(guildId, dedupeKey);
 
-  await interaction.channel.send({
+  await channel.send({
     content:
       `🎧 **PocketWave** <@${userId}>\n` +
       `> ${original}\n` +
@@ -116,6 +128,7 @@ function createPocketWaveApiSocket(
   targetLanguage: string,
   mode: string
 ) {
+    console.log("Connecting to PocketWave API:", config.pocketwaveApiWsUrl);
   const socket = new WebSocket(config.pocketwaveApiWsUrl!);
 
   socket.on("open", () => {
@@ -144,7 +157,7 @@ function createPocketWaveApiSocket(
 
       console.log("API message:", parsed);
 
-      if (parsed.type === "translation") {
+      if (isTranslationMessage(parsed)) {
         await sendTranslationToDiscord(
           interaction,
           userId,
@@ -168,9 +181,10 @@ function createPocketWaveApiSocket(
             })
           );
         }
+
         if (parsed.mode === "tactical" && interaction.guildId) {
-  queueTtsPlayback(interaction.guildId, parsed.translated);
-}
+          queueTtsPlayback(interaction.guildId, parsed.translated);
+        }
       }
     } catch (error) {
       console.error("Failed to handle API message:", error);
@@ -189,18 +203,16 @@ function createPocketWaveApiSocket(
 }
 
 export async function handleTranscribe(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply();
+
   if (!interaction.guildId || !interaction.guild) {
-    await interaction.reply({
-      content: "This command only works inside a server.",
-      ephemeral: true,
-    });
+    await interaction.editReply("This command only works inside a server.");
     return;
   }
 
   if (activeGuildTranscribers.has(interaction.guildId)) {
-    await interaction.reply({
+    await interaction.editReply({
       content: "PocketWave is already transcribing this server. Use `/stop` first.",
-      ephemeral: true,
     });
     return;
   }
@@ -208,9 +220,8 @@ export async function handleTranscribe(interaction: ChatInputCommandInteraction)
   const connection = getVoiceConnection(interaction.guildId);
 
   if (!connection) {
-    await interaction.reply({
+    await interaction.editReply({
       content: "Use /join first so PocketWave can join your voice channel.",
-      ephemeral: true,
     });
     return;
   }
@@ -347,7 +358,7 @@ export async function handleTranscribe(interaction: ChatInputCommandInteraction)
     },
   });
 
-  await interaction.reply(
+  await interaction.editReply(
     `🎧 PocketWave is now listening: **${sourceLanguage} → ${targetLanguage}**, mode: **${mode}**. Use \`/stop\` to stop.`
   );
 

@@ -5,11 +5,10 @@ import {
 import { joinVoiceChannel } from "@discordjs/voice";
 
 export async function handleJoin(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply();
+
   if (!interaction.guildId || !interaction.guild) {
-    await interaction.reply({
-      content: "This command only works inside a server.",
-      ephemeral: true,
-    });
+    await interaction.editReply("This command only works inside a server.");
     return;
   }
 
@@ -17,10 +16,7 @@ export async function handleJoin(interaction: ChatInputCommandInteraction) {
   const voiceChannel = member.voice.channel;
 
   if (!voiceChannel || voiceChannel.type !== ChannelType.GuildVoice) {
-    await interaction.reply({
-      content: "Join a voice channel first.",
-      ephemeral: true,
-    });
+    await interaction.editReply("Join a voice channel first.");
     return;
   }
 
@@ -32,7 +28,7 @@ export async function handleJoin(interaction: ChatInputCommandInteraction) {
     selfMute: true,
   });
 
-  await interaction.reply(
+  await interaction.editReply(
     `PocketWave joined **${voiceChannel.name}**. Translation is not active yet.`
   );
 

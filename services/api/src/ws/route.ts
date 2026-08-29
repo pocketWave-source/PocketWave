@@ -371,7 +371,7 @@ export function registerWebSocketRoute(app: FastifyInstance) {
   
   if (payload.type === "room_translation") {
     const roomId = String(payload.roomId ?? "");
-    if (!POCKETWAVE_BOT_SECRET || payload.botSecret !== POCKETWAVE_BOT_SECRET) {
+    if (!config.pocketwaveBotSecret || payload.botSecret !== config.pocketwaveBotSecret) {
       console.warn("Rejected room_translation: invalid bot secret", {
         roomId: payload.roomId,
         userId: payload.userId,

@@ -145,61 +145,81 @@ client.on("interactionCreate", async (interaction) => {
     return;
   }
 
-  if (interaction.commandName === "ping") {
-    await handlePing(interaction);
-    return;
+  try {
+    if (interaction.commandName === "ping") {
+      await handlePing(interaction);
+      return;
+    }
+
+    if (interaction.commandName === "room") {
+      await handleRoom(interaction);
+      return;
+    }
+
+    if (interaction.commandName === "setup") {
+      await handleSetup(interaction);
+      return;
+    }
+
+    if (interaction.commandName === "pair") {
+      await handlePair(interaction);
+      return;
+    }
+
+    if (interaction.commandName === "help") {
+      await handleHelp(interaction);
+      return;
+    }
+
+    if (interaction.commandName === "join") {
+      await handleJoin(interaction);
+      return;
+    }
+
+    if (interaction.commandName === "transcribe") {
+      await handleTranscribe(interaction);
+      return;
+    }
+
+    if (interaction.commandName === "feedback") {
+      await handleFeedback(interaction);
+      return;
+    }
+
+    if (interaction.commandName === "links") {
+      await handleLinks(interaction);
+      return;
+    }
+
+    if (interaction.commandName === "stop") {
+      await handleStop(interaction);
+      return;
+    }
+
+    if (interaction.commandName === "leave") {
+      await handleLeave(interaction);
+      return;
+    }
+  } catch (error) {
+    console.error("Interaction failed:", error);
+
+    try {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply(
+          "❌ Something went wrong while handling this command."
+        );
+      } else {
+        await interaction.reply({
+          content: "❌ Something went wrong while handling this command.",
+          ephemeral: true,
+        });
+      }
+    } catch (replyError) {
+      console.error("Failed to send interaction error reply:", replyError);
+    }
   }
-
-  if (interaction.commandName === "room") {
-    await handleRoom(interaction);
-    return;
-  }
-
-if (interaction.commandName === "setup") {
-    await handleSetup(interaction);
-    return;
-  }
-
-if (interaction.commandName === "pair") {
-    await handlePair(interaction);
-    return;
-  }
-
-if (interaction.commandName === "help") {
-    await handleHelp(interaction);
-    return;
-  }
-
-if (interaction.commandName === "join") {
-  await handleJoin(interaction);
-  return;
-}
-
-if (interaction.commandName === "transcribe") {
-  await handleTranscribe(interaction);
-  return;
-}
-
-if (interaction.commandName === "feedback") {
-    await handleFeedback(interaction);
-    return;
-  }
-
-if (interaction.commandName === "links") {
-    await handleLinks(interaction);
-    return;
-  }
-
-if (interaction.commandName === "stop") {
-  await handleStop(interaction);
-  return;
-}
-
-if (interaction.commandName === "leave") {
-  await handleLeave(interaction);
-  return;
-}
 });
+
 const healthApp = Fastify();
 
 healthApp.get("/health", async () => {
