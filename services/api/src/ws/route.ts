@@ -28,7 +28,6 @@ function safeSend(socket: WebSocket, payload: unknown) {
 }
 
 export function registerWebSocketRoute(app: FastifyInstance) {
-    console.log("Registering /ws route");
   app.get("/ws", { websocket: true }, (connection) => {
     console.log("Client connected");
   
