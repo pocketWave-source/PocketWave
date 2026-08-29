@@ -186,17 +186,22 @@ function createPocketWaveApiSocket(
           const speakerName = await getSpeakerName(interaction, userId);
 
           socket.send(
-            JSON.stringify({
-              type: "room_translation",
-              botSecret: config.pocketwaveBotSecret,
-              roomId: interaction.guildId,
-              userId,
-              speakerName,
-              original: parsed.original,
-              translated: parsed.translated,
-              mode: parsed.mode ?? "normal",
-            })
-          );
+  JSON.stringify({
+    type: "room_translation",
+    botSecret: config.pocketwaveBotSecret,
+    roomId: interaction.guildId,
+    userId,
+    speakerName,
+
+    original: parsed.original,
+    translated: parsed.translated,
+
+    sourceLanguage,
+    targetLanguage,
+    mode: parsed.mode ?? mode,
+    voiceEnabled,
+  })
+);
         }
 
         if (voiceEnabled && interaction.guildId) {
@@ -370,6 +375,11 @@ const sessionSettings: TranscriberSettings = {
 
     console.log("User started speaking:", userId);
 
+    const speakerNamePromise = getSpeakerName(
+  interaction,
+  userId
+);
+
     let apiReady = false;
 let speechEnded = false;
 let finalizeSent = false;
@@ -440,6 +450,23 @@ apiSocket = createPocketWaveApiSocket(
     }
   }
 );
+
+speakerNamePromise.then((speakerName) => {
+  if (apiSocket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  apiSocket.send(
+    JSON.stringify({
+      type: "room_speaking",
+      botSecret: config.pocketwaveBotSecret,
+      roomId: interaction.guildId,
+      userId,
+      speakerName,
+      speaking: true,
+    })
+  );
+});
 
 let guildApiSockets =
   activeApiSockets.get(interaction.guildId);
@@ -521,6 +548,23 @@ apiSocket.on("close", () => {
       console.log(
         `User stopped speaking: ${userId}. Converted chunks: ${pcmChunkCount}, bytes: ${pcmByteCount}`
       );
+
+      speakerNamePromise.then((speakerName) => {
+  if (apiSocket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  apiSocket.send(
+    JSON.stringify({
+      type: "room_speaking",
+      botSecret: config.pocketwaveBotSecret,
+      roomId: interaction.guildId,
+      userId,
+      speakerName,
+      speaking: false,
+    })
+  );
+});
 
       activeSpeakerStreams.delete(speakerKey);
 

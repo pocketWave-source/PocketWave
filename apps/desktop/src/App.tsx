@@ -5,17 +5,21 @@ import { config } from "./config";
 type InputSource = "discord" | "microphone";
 
 
-
-
-
-
-
+type OverlayActivity =
+  | "disconnected"
+  | "listening"
+  | "translating";
 
 type TranslationHistoryItem = {
   id: string;
   speakerName: string;
   original: string;
   translated: string;
+
+  sourceLanguage: string;
+  targetLanguage: string;
+  voiceEnabled: boolean;
+
   mode: "normal" | "tactical";
   createdAt: number;
 };
@@ -53,6 +57,20 @@ function getStoredValue(key: string, fallback: string) {
 
 function getLanguageLabel(code: string) {
   return languages.find((language) => language.code === code)?.label ?? code;
+}
+
+function getLanguageFlag(code: string) {
+  const flags: Record<string, string> = {
+    en: "🇬🇧",
+    uk: "🇺🇦",
+    pl: "🇵🇱",
+    de: "🇩🇪",
+    es: "🇪🇸",
+    fr: "🇫🇷",
+    ru: "🌐",
+  };
+
+  return flags[code] ?? "🌐";
 }
 
 function downsampleBuffer(
@@ -116,6 +134,8 @@ function App() {
   const [translated, setTranslated] = useState("");
   const [clickThrough, setClickThrough] = useState(false);
   const [minimalMode, setMinimalMode] = useState(false);
+  const [overlayActivity, setOverlayActivity] =
+  useState<OverlayActivity>("disconnected");
 
   const [sourceLanguage, setSourceLanguage] = useState(() =>
   getStoredValue(STORAGE_KEYS.sourceLanguage, "en")
@@ -133,9 +153,12 @@ const [roomId, setRoomId] = useState(() =>
 );
 
 const [speakerName, setSpeakerName] = useState("");
+const [speakingUser, setSpeakingUser] = useState("");
 const [pairingCode, setPairingCode] = useState("");
 const [pairingStatus, setPairingStatus] = useState("");
 const [pairedGuildName, setPairedGuildName] = useState("");
+const activityTimerRef =
+  useRef<ReturnType<typeof setTimeout> | null>(null);
 
 const pairingExpireTimerRef = useRef<number | null>(null);
 
@@ -157,6 +180,15 @@ const [inputSource, setInputSource] = useState<InputSource>(() => {
 
 const [roomStatus, setRoomStatus] = useState("Room not joined");
 const [currentMode, setCurrentMode] = useState<"normal" | "tactical">("normal");
+
+const [currentSourceLanguage, setCurrentSourceLanguage] =
+  useState("en");
+
+const [currentTargetLanguage, setCurrentTargetLanguage] =
+  useState("uk");
+
+const [currentVoiceEnabled, setCurrentVoiceEnabled] =
+  useState(false);
 
 const [translationHistory, setTranslationHistory] = useState<
   TranslationHistoryItem[]
@@ -271,10 +303,9 @@ function handleSocketMessage(payload: any) {
   }
 
   if (payload.type === "pairing_expired") {
-    setPairingCode("");
-    setPairingStatus("Pairing code expired. Generate a new one.");
-    return;
-  }
+  console.log("Server pairing session expired");
+  return;
+}
 
   if (payload.type === "paired_room") {
     const nextRoomId = String(payload.roomId ?? "");
@@ -299,6 +330,7 @@ function handleSocketMessage(payload: any) {
 
   if (payload.type === "room_joined") {
     setRoomStatus("Room joined");
+    setOverlayActivity("listening");
     return;
   }
 
@@ -319,14 +351,41 @@ if (payload.type === "transcript") {
 
 if (payload.type === "translation") {
   showLiveSubtitle({
-    speakerName: inputSource === "microphone" ? "You" : "",
-    original: payload.original,
-    translated: payload.translated,
-    mode: payload.mode ?? "normal",
-  });
+  speakerName: payload.speakerName ?? "Unknown",
+  original: payload.original ?? "",
+  translated: payload.translated ?? "",
+
+  sourceLanguage: payload.sourceLanguage ?? "en",
+  targetLanguage: payload.targetLanguage ?? "uk",
+  voiceEnabled: payload.voiceEnabled ?? false,
+
+  mode: payload.mode ?? "normal",
+});
+}
+
+if (payload.type === "overlay_speaking") {
+  if (payload.speaking) {
+    setSpeakingUser(payload.speakerName ?? "Player");
+    setOverlayActivity("listening");
+  } else {
+    setSpeakingUser("");
+  }
+
+  return;
 }
 
   if (payload.type === "overlay_translation") {
+
+    setOverlayActivity("translating");
+
+if (activityTimerRef.current) {
+  clearTimeout(activityTimerRef.current);
+}
+
+activityTimerRef.current = setTimeout(() => {
+  setOverlayActivity("listening");
+}, 1800);
+
     showLiveSubtitle({
       speakerName: payload.speakerName ?? "Unknown",
       original: payload.original ?? "",
@@ -346,12 +405,21 @@ if (payload.type === "translation") {
 
 function requestPairingCode() {
   setInputSource("discord");
-  setPairingStatus("Creating pairing code...");
+
+  if (pairingExpireTimerRef.current) {
+    window.clearTimeout(pairingExpireTimerRef.current);
+    pairingExpireTimerRef.current = null;
+  }
+
   setPairingCode("");
+  setPairingStatus("Creating pairing code...");
 
   const existingSocket = socketRef.current;
 
-  if (existingSocket && existingSocket.readyState === WebSocket.OPEN) {
+  if (
+    existingSocket &&
+    existingSocket.readyState === WebSocket.OPEN
+  ) {
     existingSocket.send(
       JSON.stringify({
         type: "create_pairing",
@@ -362,6 +430,7 @@ function requestPairingCode() {
   }
 
   const socket = new WebSocket(config.websocketUrl);
+
   socketRef.current = socket;
   setIsConnected(true);
 
@@ -405,22 +474,42 @@ function showLiveSubtitle(payload: {
   speakerName?: string;
   original: string;
   translated: string;
+
+  sourceLanguage?: string;
+  targetLanguage?: string;
+  voiceEnabled?: boolean;
+
   mode?: "normal" | "tactical";
 }) {
   const nextSpeakerName = payload.speakerName ?? "";
   const nextOriginal = payload.original ?? "";
   const nextTranslated = payload.translated ?? "";
   const nextMode = payload.mode ?? "normal";
+  const nextSourceLanguage =
+  payload.sourceLanguage ?? "en";
+
+const nextTargetLanguage =
+  payload.targetLanguage ?? "uk";
+
+const nextVoiceEnabled =
+  payload.voiceEnabled ?? false;
 
   setSpeakerName(nextSpeakerName);
   setOriginal(nextOriginal);
   setTranslated(nextTranslated);
   setCurrentMode(nextMode);
 
+  setCurrentSourceLanguage(nextSourceLanguage);
+setCurrentTargetLanguage(nextTargetLanguage);
+setCurrentVoiceEnabled(nextVoiceEnabled);
+
   addToTranslationHistory({
     speakerName: nextSpeakerName,
     original: nextOriginal,
     translated: nextTranslated,
+    sourceLanguage: nextSourceLanguage,
+  targetLanguage: nextTargetLanguage,
+  voiceEnabled: nextVoiceEnabled,
     mode: nextMode,
   });
 
@@ -795,6 +884,14 @@ async function loadAudioDevices() {
         </section>
       )}
 
+<div className={`activityIndicator ${overlayActivity}`}>
+  <span className="activityDot" />
+
+  {overlayActivity === "listening" && "Listening"}
+  {overlayActivity === "translating" && "Translating"}
+  {overlayActivity === "disconnected" && "Disconnected"}
+</div>
+
 <section className={translated ? "subtitleHud active" : "subtitleHud idle"}>
   {translated && (
     <div
@@ -808,7 +905,25 @@ async function loadAudioDevices() {
     </div>
   )}
 
-  {speakerName && <p className="hudSpeaker">{speakerName}</p>}
+{translated && (
+  <div className="translationMeta">
+    {speakerName && (
+      <span className="translationSpeaker">
+        🎙️ {speakerName}
+      </span>
+    )}
+
+    <span className="translationLanguages">
+      {getLanguageFlag(currentSourceLanguage)}
+      {" → "}
+      {getLanguageFlag(currentTargetLanguage)}
+    </span>
+
+    {currentVoiceEnabled && (
+      <span className="translationVoice">🔊</span>
+    )}
+  </div>
+)}
 
   {original && <p className="hudOriginal">{original}</p>}
 
