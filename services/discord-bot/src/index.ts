@@ -17,6 +17,13 @@ import prism from "prism-media";
 import Fastify from "fastify";
 import { config } from "./config";
 import { registerGuildCommands } from "./discord/registerCommands";
+import { handlePing } from "./handlers/ping";
+import { handleRoom } from "./handlers/room";
+import { handleSetup } from "./handlers/setup";
+import { handleHelp } from "./handlers/help";
+import { handleLinks } from "./handlers/links";
+import { handleFeedback } from "./handlers/feedback";
+import { handlePair } from "./handlers/pair";
 
 
 const token = config.discordToken;
@@ -251,69 +258,6 @@ function convertDiscordPcmToDeepgramPcm(chunk: Buffer) {
   return float32ToInt16Buffer(mono16k);
 }
 
-function pairDesktopWithGuild(code: string, guildId: string, guildName: string) {
-  return new Promise<void>((resolve, reject) => {
-    const socket = new WebSocket(apiWsUrl);
-
-    const timeout = setTimeout(() => {
-      socket.close();
-      reject(new Error("Pairing request timed out"));
-    }, 7000);
-
-    function finish(error?: Error) {
-      clearTimeout(timeout);
-
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.close();
-      }
-
-      if (error) {
-        reject(error);
-      } else {
-        resolve();
-      }
-    }
-
-    socket.on("open", () => {
-      socket.send(
-        JSON.stringify({
-          type: "pair_room",
-          botSecret: POCKETWAVE_BOT_SECRET,
-          code: code.trim().toUpperCase(),
-          roomId: guildId,
-          guildName,
-        })
-      );
-    });
-
-    socket.on("message", (data) => {
-      try {
-        const payload = JSON.parse(data.toString());
-
-        if (payload.type === "pairing_ok") {
-          finish();
-          return;
-        }
-
-        if (payload.type === "pairing_failed") {
-          finish(new Error(payload.reason ?? "Pairing failed"));
-          return;
-        }
-
-        if (payload.type === "error") {
-          finish(new Error(payload.message ?? "API error"));
-        }
-      } catch (error) {
-        finish(error instanceof Error ? error : new Error("Invalid API response"));
-      }
-    });
-
-    socket.on("error", (error) => {
-      finish(error instanceof Error ? error : new Error("Pairing socket error"));
-    });
-  });
-}
-
 async function getSpeakerName(interaction: any, userId: string) {
   try {
     const member = await interaction.guild?.members.fetch(userId);
@@ -464,162 +408,29 @@ client.on("interactionCreate", async (interaction) => {
   }
 
   if (interaction.commandName === "ping") {
-    await interaction.reply("PocketWave is online ✅");
+    await handlePing(interaction);
     return;
   }
 
   if (interaction.commandName === "room") {
-  if (!interaction.guildId) {
-    await interaction.reply({
-      content: "❌ This command can only be used inside a Discord server.",
-      ephemeral: true,
-    });
+    await handleRoom(interaction);
     return;
   }
-
-  await interaction.reply({
-    content: [
-      "🖥 **PocketWave Room ID**",
-      "",
-      "Use this Room ID inside the PocketWave desktop overlay:",
-      "",
-      `\`${interaction.guildId}\``,
-      "",
-      "Open PocketWave Desktop → select **Discord Voice** → paste this Room ID → Connect.",
-    ].join("\n"),
-    ephemeral: true,
-  });
-
-  return;
-}
 
 if (interaction.commandName === "setup") {
-  if (!interaction.guildId) {
-    await interaction.reply({
-      content: "❌ This command can only be used inside a Discord server.",
-      ephemeral: true,
-    });
+    await handleSetup(interaction);
     return;
   }
-
-  await interaction.reply({
-  content: [
-    "🎧 **PocketWave Setup**",
-    `Version: \`${POCKETWAVE_VERSION}\``,
-    "",
-    "**Recommended setup: Pairing Code**",
-    "",
-    "1. Open **PocketWave Desktop**",
-    "2. Select **Discord Voice**",
-    "3. Click **Generate Pairing Code**",
-    "4. In Discord, run:",
-    "`/pair code: YOUR_CODE`",
-    "",
-    "After pairing, your desktop overlay will connect to this Discord server automatically.",
-    "",
-    "**Then start translation:**",
-    "`/join`",
-    "`/transcribe from: English to: Ukrainian mode: Tactical`",
-    "",
-    "**Manual fallback:**",
-    "If pairing does not work, use this Room ID in PocketWave Desktop:",
-    `\`${interaction.guildId}\``,
-    "",
-    "Use `/feedback` if something is confusing or broken.",
-  ].join("\n"),
-  ephemeral: true,
-});
-
-  return;
-}
 
 if (interaction.commandName === "pair") {
-  await interaction.deferReply({ ephemeral: true });
-
-  if (!interaction.guildId) {
-    await interaction.editReply("❌ This command can only be used inside a Discord server.");
+    await handlePair(interaction);
     return;
   }
-
-  const code = interaction.options.getString("code", true).trim().toUpperCase();
-
-  if (code.length < 4 || code.length > 12) {
-    await interaction.editReply("❌ Invalid pairing code.");
-    return;
-  }
-
-  try {
-    await pairDesktopWithGuild(
-      code,
-      interaction.guildId,
-      interaction.guild?.name ?? "Unknown server"
-    );
-
-    await interaction.editReply([
-      "✅ **PocketWave Desktop paired successfully!**",
-      "",
-      "Your desktop overlay is now connected to this Discord server.",
-      "",
-      "Next:",
-      "`/join`",
-      "`/transcribe from: English to: Ukrainian mode: Tactical`",
-    ].join("\n"));
-  } catch (error) {
-    console.error("Pair command failed:", error);
-
-    await interaction.editReply([
-      "❌ Pairing failed.",
-      "",
-      "Possible reasons:",
-      "- the code is wrong",
-      "- the code expired",
-      "- PocketWave Desktop is not connected",
-      "- API is sleeping or unavailable",
-      "",
-      "Generate a new code in PocketWave Desktop and try again.",
-    ].join("\n"));
-  }
-
-  return;
-}
 
 if (interaction.commandName === "help") {
-  await interaction.reply({
-    content: [
-      "🎧 **PocketWave Help**",
-      `Version: \`${POCKETWAVE_VERSION}\``,
-      "",
-      "PocketWave translates Discord voice chat and shows subtitles in the desktop overlay.",
-      "",
-      "**Main commands:**",
-      "",
-      "`/setup` — show setup instructions and Room ID",
-      "`/pair` — pair PocketWave Desktop with this Discord server using a pairing code",
-      "`/room` — show this server Room ID for the desktop overlay",
-      "`/join` — make the bot join your current voice channel",
-      "`/transcribe` — start voice translation",
-      "`/stop` — stop transcription",
-      "`/leave` — make the bot leave the voice channel",
-      "`/feedback` — send categorized feedback about PocketWave",
-      "`/links` — show landing, download, Telegram and bot invite links",
-      "",
-      "**Example:**",
-      "`/join`",
-      "`/transcribe from: English to: Ukrainian mode: Tactical`",
-      "`/feedback category: Latency message: Overlay works, but translation delay is too high`",
-      "",
-      "**Desktop overlay:**",
-      "Use **Generate Pairing Code** in PocketWave Desktop, then run `/pair code: YOUR_CODE` in Discord.",
-      "Manual Room ID setup is still available with `/room` as fallback.",
-      "",
-      "**Tip:**",
-      "If commands do not appear right after inviting the bot, wait 1–2 minutes or restart Discord.",
-    ].join("\n"),
-    ephemeral: true,
-  });
-
-  return;
-}
+    await handleHelp(interaction);
+    return;
+  }
 
   if (interaction.commandName === "join") {
     if (!interaction.guildId || !interaction.guild) {
@@ -824,96 +635,14 @@ activeGuildTranscribers.set(interaction.guildId, {
 }
 
 if (interaction.commandName === "feedback") {
-  await interaction.deferReply({ ephemeral: true });
-
-  try {
-    const category = interaction.options.getString("category", true);
-    const feedback = interaction.options.getString("message", true).trim();
-
-    if (feedback.length < 5) {
-      await interaction.editReply("❌ Feedback is too short. Please write a bit more.");
-      return;
-    }
-
-    if (feedback.length > 1500) {
-      await interaction.editReply("❌ Feedback is too long. Please keep it under 1500 characters.");
-      return;
-    }
-
-    const feedbackChannelId = config.feedbackChannelId;
-
-    if (!feedbackChannelId) {
-      await interaction.editReply("❌ Feedback channel is not configured yet.");
-      return;
-    }
-
-    const feedbackChannel = await interaction.client.channels
-      .fetch(feedbackChannelId)
-      .catch((error) => {
-        console.error("Failed to fetch feedback channel:", error);
-        return null;
-      });
-
-    if (!feedbackChannel || !feedbackChannel.isTextBased()) {
-      await interaction.editReply("❌ Feedback channel was not found or is not a text channel.");
-      return;
-    }
-
-    const userTag = interaction.user.tag;
-    const guildName = interaction.guild?.name ?? "Unknown server";
-
-    await feedbackChannel.send({
-  content: [
-    "📝 **New PocketWave Feedback**",
-    "",
-    `**Category:** \`${category}\``,
-    `**User:** ${userTag}`,
-    `**Server:** ${guildName}`,
-    `**User ID:** \`${interaction.user.id}\``,
-    "",
-    "**Message:**",
-    feedback,
-  ].join("\n"),
-  allowedMentions: { users: [] },
-});
-
-    await interaction.editReply("✅ Thanks! Your feedback was sent to the PocketWave team.");
-  } catch (error) {
-    console.error("Feedback command failed:", error);
-
-    await interaction.editReply(
-      "❌ Something went wrong while sending feedback. Please try again later."
-    );
+    await handleFeedback(interaction);
+    return;
   }
 
-  return;
-}
-
 if (interaction.commandName === "links") {
-  const landingUrl = config.landingUrl;
-  const downloadUrl = config.downloadUrl;
-  const telegramUrl = config.telegramUrl;
-  const inviteUrl = config.discordInviteUrl;
-
-  await interaction.reply({
-    content: [
-      "🔗 **PocketWave Links**",
-      `Version: \`${POCKETWAVE_VERSION}\``,
-      "",
-      landingUrl ? `🌊 **Landing page:** ${landingUrl}` : null,
-      downloadUrl ? `🖥 **Download Desktop:** ${downloadUrl}` : null,
-      telegramUrl ? `📢 **Telegram:** ${telegramUrl}` : null,
-      inviteUrl ? `🤖 **Invite Discord Bot:** ${inviteUrl}` : null,
-      "",
-      "Use `/setup` to get your Room ID and start the desktop overlay.",
-    ]
-      .filter(Boolean)
-      .join("\n"),
-    ephemeral: true,
-  });
-
-  return;
-}
+    await handleLinks(interaction);
+    return;
+  }
 
 if (interaction.commandName === "stop") {
   if (!interaction.guildId) {
