@@ -21,7 +21,7 @@ export function createDeepgramSocket(sourceLanguage: string) {
   const dgUrl = buildDeepgramUrl(sourceLanguage);
 
   console.log("Deepgram connect params:", {
-  language: settings.sourceLanguage,
+  language: sourceLanguage,
   encoding: "linear16",
   sampleRate: 16000,
   channels: 1,
