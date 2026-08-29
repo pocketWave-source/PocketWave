@@ -128,7 +128,6 @@ function createPocketWaveApiSocket(
   targetLanguage: string,
   mode: string
 ) {
-    console.log("Connecting to PocketWave API:", config.pocketwaveApiWsUrl);
   const socket = new WebSocket(config.pocketwaveApiWsUrl!);
 
   socket.on("open", () => {
@@ -182,9 +181,9 @@ function createPocketWaveApiSocket(
           );
         }
 
-        if (parsed.mode === "tactical" && interaction.guildId) {
-          queueTtsPlayback(interaction.guildId, parsed.translated);
-        }
+        if (mode === "tactical" && interaction.guildId) {
+  queueTtsPlayback(interaction.guildId, parsed.translated);
+}
       }
     } catch (error) {
       console.error("Failed to handle API message:", error);

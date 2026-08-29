@@ -1,17 +1,10 @@
 import "dotenv/config";
-import Fastify from "fastify";
-import websocket from "@fastify/websocket";
 import { config } from "./config";
+import { createApiServer } from "./server";
 
-
-const app = Fastify({
-  logger: true,
-});
-
-await app.register(websocket);
-
+const app = await createApiServer();
 
 await app.listen({
-  port: Number(config.port ?? 4000),
+  port: config.port,
   host: "0.0.0.0",
 });

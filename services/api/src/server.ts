@@ -3,17 +3,18 @@ import websocket from "@fastify/websocket";
 import { registerWebSocketRoute } from "./ws/route";
 
 export async function createApiServer() {
-  const app = Fastify({
-    logger: true,
-  });
+  const app = Fastify();
 
   await app.register(websocket);
 
-app.get("/health", async () => {
-  return { status: "ok" };
-});
+  app.get("/health", async () => {
+    return {
+      status: "ok",
+      service: "pocketwave-api",
+    };
+  });
 
-registerWebSocketRoute(app);
+  registerWebSocketRoute(app);
 
   return app;
 }

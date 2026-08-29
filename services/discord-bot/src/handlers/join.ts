@@ -25,7 +25,7 @@ export async function handleJoin(interaction: ChatInputCommandInteraction) {
     guildId: interaction.guildId,
     adapterCreator: interaction.guild.voiceAdapterCreator,
     selfDeaf: false,
-    selfMute: true,
+    selfMute: false,
   });
 
   await interaction.editReply(
