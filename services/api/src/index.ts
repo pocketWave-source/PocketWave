@@ -3,7 +3,6 @@ import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import WebSocket from "ws";
 import OpenAI from "openai";
-import crypto from "node:crypto";
 import { config } from "./config";
 import { ClientSettings, PairingSession, RoomClient, TranslationMode } from "./types";
 import { broadcastToRoom, joinRoom, leaveAllRooms } from "./ws/rooms";
@@ -16,11 +15,11 @@ if (!POCKETWAVE_BOT_SECRET) {
 }
 
 const MAX_PRODUCER_SESSION_MS = Number(
-  process.env.MAX_PRODUCER_SESSION_MS ?? 30 * 60 * 1000
+  config.maxProducerSessionMs ?? 30 * 60 * 1000
 );
 
 const PRODUCER_IDLE_TIMEOUT_MS = Number(
-  process.env.PRODUCER_IDLE_TIMEOUT_MS ?? 60 * 1000
+  config.producerIdleTimeoutMs ?? 60 * 1000
 );
 
 const app = Fastify({
@@ -33,7 +32,7 @@ const openai = new OpenAI({
   apiKey: config.openAiApiKey,
 });
 
-const PAIRING_TTL_MS = Number(process.env.PAIRING_TTL_MS ?? 10 * 60 * 1000);
+const PAIRING_TTL_MS = Number(config.pairingTtlMs ?? 10 * 60 * 1000);
 
 const DEFAULT_SETTINGS: ClientSettings = {
   sourceLanguage: "en",
@@ -304,7 +303,7 @@ app.get("/ws", { websocket: true }, (connection) => {
       const payload = JSON.parse(message.toString());
 
       if (payload.type === "create_pairing") {
-  const session = createPairingSession(connection, {});
+  const session = createPairingSession(connection);
 
   safeSend(connection, {
     type: "pairing_created",
@@ -521,6 +520,6 @@ if (payload.type === "room_translation") {
 });
 
 await app.listen({
-  port: Number(process.env.PORT ?? 4000),
+  port: Number(config.port ?? 4000),
   host: "0.0.0.0",
 });
