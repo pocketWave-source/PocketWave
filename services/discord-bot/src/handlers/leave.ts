@@ -1,6 +1,7 @@
 import type { ChatInputCommandInteraction } from "discord.js";
 import { getVoiceConnection } from "@discordjs/voice";
 import { activeGuildTranscribers } from "../voice/state";
+import { stopGuildTts } from "../voice/tts";
 
 export async function handleLeave(interaction: ChatInputCommandInteraction) {
   if (!interaction.guildId) {

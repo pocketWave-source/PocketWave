@@ -1,5 +1,12 @@
-import type { ChatInputCommandInteraction } from "discord.js";
-import { EndBehaviorType, getVoiceConnection } from "@discordjs/voice";
+import {
+  ChannelType,
+  type ChatInputCommandInteraction,
+} from "discord.js";
+import {
+  EndBehaviorType,
+  getVoiceConnection,
+  joinVoiceChannel,
+} from "@discordjs/voice";
 import WebSocket from "ws";
 import prism from "prism-media";
 import { queueTtsPlayback } from "./tts";
@@ -226,16 +233,58 @@ export async function handleTranscribe(interaction: ChatInputCommandInteraction)
     return;
   }
 
-  const connection = getVoiceConnection(interaction.guildId);
+  let connection = getVoiceConnection(interaction.guildId);
 
-  if (!connection) {
-    await interaction.editReply({
-      content: "Use /join first so PocketWave can join your voice channel.",
-    });
+if (!connection) {
+  const member = await interaction.guild.members.fetch(
+    interaction.user.id
+  );
+
+  const voiceChannel = member.voice.channel;
+
+  if (
+    !voiceChannel ||
+    voiceChannel.type !== ChannelType.GuildVoice
+  ) {
+    await interaction.editReply(
+      "❌ Join a voice channel first, then run `/transcribe` again."
+    );
+
     return;
   }
 
-  const sourceLanguage =
+  console.log(
+    `Auto-joining voice channel ${voiceChannel.name} for /transcribe`
+  );
+
+  connection = joinVoiceChannel({
+    channelId: voiceChannel.id,
+    guildId: interaction.guildId,
+    adapterCreator: interaction.guild.voiceAdapterCreator,
+
+    // треба слухати користувачів
+    selfDeaf: false,
+
+    // треба мати можливість говорити через TTS
+    selfMute: false,
+  });
+}
+
+const member = await interaction.guild.members.fetch(
+  interaction.user.id
+);
+
+const userVoiceChannel = member.voice.channel;
+
+if (!userVoiceChannel) {
+  await interaction.editReply(
+    "❌ You need to be inside a voice channel."
+  );
+
+  return;
+}
+
+const sourceLanguage =
   interaction.options.getString("from") ?? "en";
 
 const targetLanguage =
@@ -248,6 +297,39 @@ const mode =
 
 const voiceEnabled =
   interaction.options.getString("voice") === "on";
+
+const botChannelId = connection.joinConfig.channelId;
+
+if (
+  botChannelId &&
+  botChannelId !== userVoiceChannel.id
+) {
+  const botChannel =
+    interaction.guild.channels.cache.get(botChannelId);
+
+  const channelId = connection.joinConfig.channelId;
+
+  const connectedChannel = channelId
+    ? interaction.guild.channels.cache.get(channelId)
+    : null;
+
+  await interaction.editReply(
+    [
+      "🎧 **PocketWave translation started**",
+      "",
+      `Voice channel: **${connectedChannel?.name ?? "Connected"}**`,
+      `Language: **${sourceLanguage} → ${targetLanguage}**`,
+      `Mode: **${mode === "tactical" ? "Tactical" : "Normal"}**`,
+      `Voice output: **${voiceEnabled ? "🔊 ON" : "🔇 OFF"}**`,
+      "",
+      "`/settings` — change settings",
+      "`/status` — check status",
+      "`/stop` — stop translation",
+    ].join("\n")
+  );
+
+  return;
+}
 
 const sessionSettings: TranscriberSettings = {
   sourceLanguage,
