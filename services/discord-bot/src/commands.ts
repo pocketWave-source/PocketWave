@@ -60,6 +60,46 @@ export const commands = [
     description: "Stop transcription",
   },
   {
+    name: "settings",
+    description: "Change the active PocketWave translation settings",
+    options: [
+      {
+        name: "from",
+        description: "New source language",
+        type: ApplicationCommandOptionType.String,
+        required: false,
+        choices: LANGUAGE_CHOICES,
+      },
+      {
+        name: "to",
+        description: "New target language",
+        type: ApplicationCommandOptionType.String,
+        required: false,
+        choices: LANGUAGE_CHOICES,
+      },
+      {
+        name: "mode",
+        description: "New translation mode",
+        type: ApplicationCommandOptionType.String,
+        required: false,
+        choices: [
+          { name: "Normal", value: "normal" },
+          { name: "Tactical", value: "tactical" },
+        ],
+      },
+      {
+        name: "voice",
+        description: "Enable or disable translated voice output",
+        type: ApplicationCommandOptionType.String,
+        required: false,
+        choices: [
+          { name: "On", value: "on" },
+          { name: "Off", value: "off" },
+        ],
+      },
+    ],
+  },
+  {
     name: "transcribe",
     description: "Start PocketWave voice translation",
     options: [

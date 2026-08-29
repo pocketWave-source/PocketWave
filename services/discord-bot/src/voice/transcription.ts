@@ -3,6 +3,7 @@ import { EndBehaviorType, getVoiceConnection } from "@discordjs/voice";
 import WebSocket from "ws";
 import prism from "prism-media";
 import { queueTtsPlayback } from "./tts";
+import type { TranscriberSettings } from "./state";
 
 import { config } from "../config";
 import { convertDiscordPcmToDeepgramPcm, DISCORD_CHANNELS, DISCORD_SAMPLE_RATE } from "./audio";
@@ -234,10 +235,26 @@ export async function handleTranscribe(interaction: ChatInputCommandInteraction)
     return;
   }
 
-  const sourceLanguage = interaction.options.getString("from") ?? "en";
-  const targetLanguage = interaction.options.getString("to") ?? "uk";
-  const mode = interaction.options.getString("mode") ?? "normal";
-  const voiceEnabled = interaction.options.getString("voice") === "on";
+  const sourceLanguage =
+  interaction.options.getString("from") ?? "en";
+
+const targetLanguage =
+  interaction.options.getString("to") ?? "uk";
+
+const mode =
+  interaction.options.getString("mode") === "tactical"
+    ? "tactical"
+    : "normal";
+
+const voiceEnabled =
+  interaction.options.getString("voice") === "on";
+
+const sessionSettings: TranscriberSettings = {
+  sourceLanguage,
+  targetLanguage,
+  mode,
+  voiceEnabled,
+};
 
   console.log("Transcribe settings:", {
     sourceLanguage,
@@ -327,10 +344,10 @@ function sendFinalize() {
 apiSocket = createPocketWaveApiSocket(
   interaction,
   userId,
-  sourceLanguage,
-  targetLanguage,
-  mode,
-  voiceEnabled,
+  sessionSettings.sourceLanguage,
+  sessionSettings.targetLanguage,
+  sessionSettings.mode,
+  sessionSettings.voiceEnabled,
   () => {
     apiReady = true;
     flushPendingAudio();
@@ -437,29 +454,37 @@ if (apiReady) {
   receiver.speaking.on("start", handleSpeakingStart);
 
   activeGuildTranscribers.set(interaction.guildId, {
-    stop: () => {
-      receiver.speaking.off("start", handleSpeakingStart);
+  settings: sessionSettings,
+  startedAt: Date.now(),
 
-      const guildSubscriptions = activeSubscriptions.get(interaction.guildId!);
+  stop: () => {
+    receiver.speaking.off("start", handleSpeakingStart);
 
-      if (guildSubscriptions) {
-        for (const stream of guildSubscriptions) {
-          stream.destroy();
-        }
+    const guildSubscriptions =
+      activeSubscriptions.get(interaction.guildId!);
 
-        guildSubscriptions.clear();
-        for (const key of activeSpeakerStreams) {
-  if (key.startsWith(`${interaction.guildId}:`)) {
-    activeSpeakerStreams.delete(key);
-  }
-}
+    if (guildSubscriptions) {
+      for (const stream of guildSubscriptions) {
+        stream.destroy();
       }
 
-      activeGuildTranscribers.delete(interaction.guildId!);
+      guildSubscriptions.clear();
+    }
 
-      console.log("Active transcriber stopped for guild:", interaction.guildId);
-    },
-  });
+    for (const key of activeSpeakerStreams) {
+      if (key.startsWith(`${interaction.guildId}:`)) {
+        activeSpeakerStreams.delete(key);
+      }
+    }
+
+    activeGuildTranscribers.delete(interaction.guildId!);
+
+    console.log(
+      "Active transcriber stopped for guild:",
+      interaction.guildId
+    );
+  },
+});
 
   await interaction.editReply(
   [

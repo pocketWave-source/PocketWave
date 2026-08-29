@@ -20,6 +20,7 @@ import { handleStop } from "./handlers/stop";
 import { handleLeave } from "./handlers/leave";
 import { handleTranscribe } from "./voice/transcription";
 import { handleStatus } from "./handlers/status";
+import { handleSettings } from "./handlers/settings";
 
 const token = config.discordToken;
 const clientId = config.discordClientId;
@@ -154,6 +155,11 @@ client.on("interactionCreate", async (interaction) => {
 
     if (interaction.commandName === "status") {
       await handleStatus(interaction);
+      return;
+    }
+
+    if (interaction.commandName === "settings") {
+      await handleSettings(interaction);
       return;
     }
 

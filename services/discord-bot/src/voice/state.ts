@@ -1,17 +1,33 @@
 import type { Readable } from "node:stream";
 
-export type ActiveTranscriber = {
-  stop: () => void;
+export type TranslationMode = "normal" | "tactical";
+
+export type TranscriberSettings = {
+  sourceLanguage: string;
+  targetLanguage: string;
+  mode: TranslationMode;
+  voiceEnabled: boolean;
 };
 
-export const activeGuildTranscribers = new Map<string, ActiveTranscriber>();
+export type ActiveTranscriber = {
+  stop: () => void;
+  settings: TranscriberSettings;
+  startedAt: number;
+};
 
-export const activeSubscriptions = new Map<string, Set<Readable>>();
+export const activeGuildTranscribers =
+  new Map<string, ActiveTranscriber>();
 
-export const activeSpeakerStreams = new Set<string>();
+export const activeSubscriptions =
+  new Map<string, Set<Readable>>();
 
-export const lastTranslationByGuild = new Map<string, string>();
+export const activeSpeakerStreams =
+  new Set<string>();
 
-export const lastDiscordMessageAtByUser = new Map<string, number>();
+export const lastTranslationByGuild =
+  new Map<string, string>();
+
+export const lastDiscordMessageAtByUser =
+  new Map<string, number>();
 
 export const DISCORD_MESSAGE_COOLDOWN_MS = 2000;

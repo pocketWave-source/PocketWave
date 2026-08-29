@@ -92,15 +92,15 @@ export async function handleStatus(
     lines.push(
       "",
       "**Translation session**",
-      `From: **${getLanguageName(transcriber.sourceLanguage)}**`,
-      `To: **${getLanguageName(transcriber.targetLanguage)}**`,
+      `From: **${getLanguageName(transcriber.settings.sourceLanguage)}**`,
+      `To: **${getLanguageName(transcriber.settings.targetLanguage)}**`,
       `Mode: **${
-        transcriber.mode === "tactical"
+        transcriber.settings.mode === "tactical"
           ? "Tactical"
           : "Normal"
       }**`,
       `Voice output: **${
-        transcriber.voiceEnabled
+        transcriber.settings.voiceEnabled
           ? "🔊 ON"
           : "🔇 OFF"
       }**`,
