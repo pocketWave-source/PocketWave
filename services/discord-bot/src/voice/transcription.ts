@@ -128,6 +128,7 @@ function createPocketWaveApiSocket(
   sourceLanguage: string,
   targetLanguage: string,
   mode: string,
+  voiceEnabled: boolean,
   onSttReady?: () => void
 ) {
   const socket = new WebSocket(config.pocketwaveApiWsUrl!);
@@ -189,7 +190,7 @@ function createPocketWaveApiSocket(
           );
         }
 
-        if (mode === "tactical" && interaction.guildId) {
+        if (voiceEnabled && interaction.guildId) {
   queueTtsPlayback(interaction.guildId, parsed.translated);
 }
       }
@@ -236,6 +237,7 @@ export async function handleTranscribe(interaction: ChatInputCommandInteraction)
   const sourceLanguage = interaction.options.getString("from") ?? "en";
   const targetLanguage = interaction.options.getString("to") ?? "uk";
   const mode = interaction.options.getString("mode") ?? "normal";
+  const voiceEnabled = interaction.options.getString("voice") === "on";
 
   console.log("Transcribe settings:", {
     sourceLanguage,
@@ -328,6 +330,7 @@ apiSocket = createPocketWaveApiSocket(
   sourceLanguage,
   targetLanguage,
   mode,
+  voiceEnabled,
   () => {
     apiReady = true;
     flushPendingAudio();
@@ -459,8 +462,16 @@ if (apiReady) {
   });
 
   await interaction.editReply(
-    `🎧 PocketWave is now listening: **${sourceLanguage} → ${targetLanguage}**, mode: **${mode}**. Use \`/stop\` to stop.`
-  );
+  [
+    "🎧 **PocketWave translation started**",
+    "",
+    `Language: **${sourceLanguage} → ${targetLanguage}**`,
+    `Mode: **${mode}**`,
+    `Voice translation: **${voiceEnabled ? "ON 🔊" : "OFF 🔇"}**`,
+    "",
+    "Use `/stop` to stop.",
+  ].join("\n")
+);
 
   console.log("Transcription listener started");
 }

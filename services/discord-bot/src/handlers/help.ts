@@ -26,6 +26,8 @@ export async function handleHelp(interaction: ChatInputCommandInteraction) {
       "2. Discord → `/pair code: YOUR_CODE`",
       "3. Discord → `/join`",
       "4. Discord → `/transcribe from: English to: Ukrainian mode: Tactical`",
+      "`voice: On` — translated speech is played in Discord",
+"`voice: Off` — subtitles/text only",
       "",
       "**Tip:**",
       "If commands do not appear right after inviting the bot, wait 1–2 minutes or restart Discord.",

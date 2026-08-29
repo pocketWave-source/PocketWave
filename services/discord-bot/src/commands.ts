@@ -83,6 +83,16 @@ export const commands = [
           { name: "Tactical", value: "tactical" },
         ],
       },
+      {
+          name: "voice",
+          description: "Play translated speech back into the voice channel",
+          type: ApplicationCommandOptionType.String,
+          required: false,
+          choices: [
+            { name: "On", value: "on" },
+            { name: "Off", value: "off" },
+          ],
+      },
     ],
   },
   {
