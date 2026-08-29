@@ -3,10 +3,7 @@ import {
   ChannelType,
   Client,
   GatewayIntentBits,
-  REST,
-  Routes,
   PermissionFlagsBits,
-  SlashCommandBuilder,
 } from "discord.js";
 import {
     EndBehaviorType,
@@ -18,33 +15,21 @@ import type { Readable } from "node:stream";
 import WebSocket from "ws";
 import prism from "prism-media";
 import Fastify from "fastify";
+import { config } from "./config";
+import { registerGuildCommands } from "./discord/registerCommands";
 
-const token = process.env.DISCORD_TOKEN;
-const clientId = process.env.DISCORD_CLIENT_ID;
-const guildId = process.env.DISCORD_GUILD_ID;
 
-const apiWsUrl = process.env.POCKETWAVE_API_WS_URL ?? "ws://api:4000/ws";
-const POCKETWAVE_VERSION = process.env.POCKETWAVE_VERSION ?? "dev";
+const token = config.discordToken;
+const clientId = config.discordClientId;
+const guildId = config.discordGuildId;
 
-const POCKETWAVE_BOT_SECRET = process.env.POCKETWAVE_BOT_SECRET;
+const apiWsUrl = config.pocketwaveApiWsUrl!;
+const POCKETWAVE_VERSION = config.pocketwaveVersion;
+const POCKETWAVE_BOT_SECRET = config.pocketwaveBotSecret!;
 
-if (!POCKETWAVE_BOT_SECRET) {
-  console.warn("POCKETWAVE_BOT_SECRET is not configured. API room relay may reject messages.");
+if (!config.pocketwaveBotSecret) {
+  throw new Error("POCKETWAVE_BOT_SECRET is not configured.");
 }
-
-const languages = [
-  { name: "English", value: "en" },
-  { name: "Ukrainian", value: "uk" },
-  { name: "Polish", value: "pl" },
-  { name: "German", value: "de" },
-  { name: "Spanish", value: "es" },
-  { name: "French", value: "fr" },
-];
-
-const translationModes = [
-  { name: "Normal", value: "normal" },
-  { name: "Tactical", value: "tactical" },
-];
 
 const DISCORD_SAMPLE_RATE = 48000;
 const TARGET_SAMPLE_RATE = 16000;
@@ -355,113 +340,6 @@ if (!token || !clientId) {
   );
 }
 
-const commands = [
-  new SlashCommandBuilder()
-    .setName("ping")
-    .setDescription("Check if PocketWave bot is alive"),
-
-  new SlashCommandBuilder()
-    .setName("join")
-    .setDescription("Join your current voice channel"),
-
-  new SlashCommandBuilder()
-    .setName("leave")
-    .setDescription("Leave the current voice channel"),
-
-  new SlashCommandBuilder()
-    .setName("setup")
-    .setDescription("Show PocketWave setup instructions"),
-
-  new SlashCommandBuilder()
-    .setName("room")
-    .setDescription("Show this server Room ID for the desktop overlay"),
-
-  new SlashCommandBuilder()
-    .setName("help")
-    .setDescription("Show PocketWave commands and usage"),
-
-  new SlashCommandBuilder()
-    .setName("links")
-    .setDescription("Show useful PocketWave links"),
-
-  new SlashCommandBuilder()
-    .setName("pair")
-    .setDescription("Pair PocketWave Desktop with this Discord server")
-    .addStringOption((option) =>
-      option
-        .setName("code")
-        .setDescription("Pairing code shown in PocketWave Desktop")
-        .setRequired(true)
-    ),
-
-  new SlashCommandBuilder()
-  .setName("feedback")
-  .setDescription("Send feedback about PocketWave")
-  .addStringOption((option) =>
-    option
-      .setName("category")
-      .setDescription("Feedback category")
-      .setRequired(true)
-      .addChoices(
-        { name: "Bug", value: "bug" },
-        { name: "Setup", value: "setup" },
-        { name: "Latency", value: "latency" },
-        { name: "Translation", value: "translation" },
-        { name: "Overlay", value: "overlay" },
-        { name: "Idea", value: "idea" }
-      )
-  )
-  .addStringOption((option) =>
-    option
-      .setName("message")
-      .setDescription("What should be improved?")
-      .setRequired(true)
-  ),
-
-  new SlashCommandBuilder()
-  .setName("transcribe")
-  .setDescription("Start listening and translating the current voice channel")
-  .addStringOption((option) =>
-    option
-      .setName("from")
-      .setDescription("Source language")
-      .setRequired(false)
-      .addChoices(...languages)
-  )
-  .addStringOption((option) =>
-    option
-      .setName("to")
-      .setDescription("Target language")
-      .setRequired(false)
-      .addChoices(...languages)
-  )
-  .addStringOption((option) =>
-    option
-      .setName("mode")
-      .setDescription("Translation mode")
-      .setRequired(false)
-      .addChoices(...translationModes)
-  ),
-
-  new SlashCommandBuilder()
-    .setName("stop")
-    .setDescription("Stop listening to the current voice channel"),
-].map((command) => command.toJSON());
-
-async function registerGuildCommands(guildId: string) {
-  const rest = new REST({ version: "10" }).setToken(token);
-  try {
-    await rest.put(
-      Routes.applicationGuildCommands(clientId, guildId),
-      { body: commands }
-    );
-
-    console.log(`Registered slash commands for guild ${guildId}`);
-  } catch (error) {
-    console.error(`Failed to register slash commands for guild ${guildId}:`, error);
-  }
-}
-
 async function findWritableTextChannel(guild: any) {
   const me = guild.members.me ?? (await guild.members.fetchMe().catch(() => null));
 
@@ -510,9 +388,9 @@ async function sendGuildWelcomeMessage(guild: any) {
     return;
   }
 
-  const landingUrl = process.env.POCKETWAVE_LANDING_URL;
-  const downloadUrl = process.env.POCKETWAVE_DOWNLOAD_URL;
-  const telegramUrl = process.env.POCKETWAVE_TELEGRAM_URL;
+  const landingUrl = config.landingUrl;
+  const downloadUrl = config.downloadUrl;
+  const telegramUrl = config.telegramUrl;
 
   await channel
     .send({
@@ -527,9 +405,9 @@ async function sendGuildWelcomeMessage(guild: any) {
         "`/links` — useful PocketWave links",
         "",
         "**Basic flow:**",
-        "1. Download PocketWave Desktop",
-        "2. Run `/setup` and copy Room ID",
-        "3. Join a voice channel",
+        "1. Open PocketWave Desktop",
+        "2. Generate Pairing Code",
+        "3. Run /pair code: YOUR_CODE",
         "4. Run `/join`",
         "5. Run `/transcribe`",
         "",
@@ -546,16 +424,6 @@ async function sendGuildWelcomeMessage(guild: any) {
     .catch((error: any) => {
       console.error(`Failed to send welcome message to guild ${guild.id}:`, error);
     });
-}
-
-async function registerCommands() {
-  const rest = new REST({ version: "10" }).setToken(token);
-
-  await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
-    body: commands,
-  });
-
-  console.log("Slash commands registered");
 }
 
 const client = new Client({
@@ -741,7 +609,8 @@ if (interaction.commandName === "help") {
       "`/feedback category: Latency message: Overlay works, but translation delay is too high`",
       "",
       "**Desktop overlay:**",
-      "Use `/room` or `/setup`, copy the Room ID, then paste it into PocketWave Desktop in **Discord Voice** mode.",
+      "Use **Generate Pairing Code** in PocketWave Desktop, then run `/pair code: YOUR_CODE` in Discord.",
+      "Manual Room ID setup is still available with `/room` as fallback.",
       "",
       "**Tip:**",
       "If commands do not appear right after inviting the bot, wait 1–2 minutes or restart Discord.",
@@ -971,7 +840,7 @@ if (interaction.commandName === "feedback") {
       return;
     }
 
-    const feedbackChannelId = process.env.FEEDBACK_CHANNEL_ID;
+    const feedbackChannelId = config.feedbackChannelId;
 
     if (!feedbackChannelId) {
       await interaction.editReply("❌ Feedback channel is not configured yet.");
@@ -1021,10 +890,10 @@ if (interaction.commandName === "feedback") {
 }
 
 if (interaction.commandName === "links") {
-  const landingUrl = process.env.POCKETWAVE_LANDING_URL;
-  const downloadUrl = process.env.POCKETWAVE_DOWNLOAD_URL;
-  const telegramUrl = process.env.POCKETWAVE_TELEGRAM_URL;
-  const inviteUrl = process.env.POCKETWAVE_DISCORD_INVITE_URL;
+  const landingUrl = config.landingUrl;
+  const downloadUrl = config.downloadUrl;
+  const telegramUrl = config.telegramUrl;
+  const inviteUrl = config.discordInviteUrl;
 
   await interaction.reply({
     content: [
@@ -1108,9 +977,8 @@ healthApp.get("/health", async () => {
 });
 
 await healthApp.listen({
-  port: Number(process.env.PORT ?? 4001),
+  port: Number(config.port),
   host: "0.0.0.0",
 });
 
-await registerCommands();
 await client.login(token);
