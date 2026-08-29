@@ -1,63 +1,68 @@
 import OpenAI from "openai";
-import type { TranslationMode } from "../types";
 import { config } from "../config";
+import type { ClientSettings } from "../types";
 
 const openai = new OpenAI({
-  apiKey: config.openAiApiKey,
+  apiKey: config.openaiApiKey,
 });
 
-const targetLanguageNames: Record<string, string> = {
-  uk: "Ukrainian",
+const LANGUAGE_NAMES: Record<string, string> = {
   en: "English",
+  uk: "Ukrainian",
   pl: "Polish",
+  ru: "Russian",
   de: "German",
-  es: "Spanish",
   fr: "French",
+  es: "Spanish",
 };
 
 export async function translateText(
   text: string,
-  targetLanguage: string,
-  mode: TranslationMode
+  sourceLanguageCode: string,
+  targetLanguageCode: string,
+  mode: ClientSettings["mode"]
 ) {
-  const targetName = targetLanguageNames[targetLanguage] ?? "Ukrainian";
+  const sourceLanguage =
+    LANGUAGE_NAMES[sourceLanguageCode] ?? sourceLanguageCode;
 
-  const normalInstructions = `
-Translate gaming voice chat into natural ${targetName}.
+  const targetLanguage =
+    LANGUAGE_NAMES[targetLanguageCode] ?? targetLanguageCode;
 
-Rules:
-- Return only the translation.
-- Keep it short and readable for subtitles.
-- Preserve gaming meaning, not word-for-word translation.
-- Keep known gaming terms natural: rush, rotate, heal, push, site, mid, B, A, flank.
-- Do not add explanations.
-`.trim();
-
-  const tacticalInstructions = `
-Convert gaming voice chat into a short tactical callout in ${targetName}.
-
-Rules:
-- Return only the tactical callout.
-- Maximum 1 short line.
-- Prefer 2-6 words when possible.
-- Keep urgent gameplay meaning.
-- Remove filler words.
-- Use short gamer-style phrases.
-- Preserve important map/game terms like A, B, mid, short, long, flank, ship, left, right.
-- Do not explain.
-- Do not add extra context.
-
-Examples:
-"They are coming from the left side of our ship" -> "Ворог зліва. Біля корабля."
-"Rush B fast, one is low" -> "Швидко B. Один low."
-"I need healing behind the wall" -> "Потрібен heal за стіною."
-`.trim();
+  const systemPrompt =
+    mode === "tactical"
+      ? [
+          "You are PocketWave, a real-time voice translator for gamers.",
+          `Translate from ${sourceLanguage} to ${targetLanguage}.`,
+          `Your output language MUST be ${targetLanguage}.`,
+          "Output ONLY the translated tactical callout.",
+          "Do not explain.",
+          "Do not answer the message.",
+          "Do not keep the source language unless it is a game/map term.",
+          "Keep it short: 2–8 words when possible.",
+        ].join("\n")
+      : [
+          "You are PocketWave, a real-time voice translator.",
+          `Translate from ${sourceLanguage} to ${targetLanguage}.`,
+          `Your output language MUST be ${targetLanguage}.`,
+          "Output ONLY the translation.",
+          "Do not explain.",
+          "Do not answer the message.",
+          "Do not keep the source language unless it is a name, nickname, or game term.",
+        ].join("\n");
 
   const response = await openai.responses.create({
     model: "gpt-4.1-mini",
-    instructions: mode === "tactical" ? tacticalInstructions : normalInstructions,
-    input: text,
+    input: [
+      {
+        role: "system",
+        content: systemPrompt,
+      },
+      {
+        role: "user",
+        content: text,
+      },
+    ],
   });
 
-  return response.output_text;
+  return response.output_text.trim();
 }

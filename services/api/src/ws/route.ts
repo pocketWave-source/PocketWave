@@ -148,9 +148,10 @@ export function registerWebSocketRoute(app: FastifyInstance) {
     console.log("Translating final transcript:", transcript);
 
     const translated = await translateText(
-      transcript,
-      settings.targetLanguage,
-      settings.mode,
+  transcript,
+  settings.sourceLanguage,
+  settings.targetLanguage,
+  settings.mode
 );
 
     console.log("Translation result:", translated);
