@@ -1,29 +1,36 @@
-import type { ChatInputCommandInteraction } from "discord.js";
-import { activeGuildTranscribers } from "../voice/state";
-import { stopGuildTts } from "../voice/tts";
+import {
+  MessageFlags,
+  type ChatInputCommandInteraction,
+} from "discord.js";
 
-export async function handleStop(interaction: ChatInputCommandInteraction) {
+import { activeGuildTranscribers } from "../voice/state";
+import { cleanupGuildVoiceSession } from "../voice/cleanup";
+
+export async function handleStop(
+  interaction: ChatInputCommandInteraction
+) {
   if (!interaction.guildId) {
     await interaction.reply({
       content: "This command only works inside a server.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
-  const transcriber = activeGuildTranscribers.get(interaction.guildId);
-
-  if (!transcriber) {
+  if (!activeGuildTranscribers.has(interaction.guildId)) {
     await interaction.reply({
-      content: "PocketWave is not currently transcribing this server.",
-      ephemeral: true,
+      content:
+        "PocketWave is not currently translating this server.",
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
-  transcriber.stop();
-  stopGuildTts(interaction.guildId);
+  cleanupGuildVoiceSession(interaction.guildId);
 
-  await interaction.reply("PocketWave stopped transcribing.");
-  console.log("Transcription stopped");
+  await interaction.reply(
+    "⏹️ PocketWave stopped translating. The bot remains in the voice channel."
+  );
+
+  console.log("Translation stopped:", interaction.guildId);
 }

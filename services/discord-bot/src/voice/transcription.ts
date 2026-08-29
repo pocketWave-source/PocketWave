@@ -21,6 +21,7 @@ import {
   DISCORD_MESSAGE_COOLDOWN_MS,
   lastDiscordMessageAtByUser,
   lastTranslationByGuild,
+  activeApiSockets
 } from "./state";
 
 type PocketWaveApiMessage =
@@ -440,6 +441,27 @@ apiSocket = createPocketWaveApiSocket(
   }
 );
 
+let guildApiSockets =
+  activeApiSockets.get(interaction.guildId);
+
+if (!guildApiSockets) {
+  guildApiSockets = new Set();
+  activeApiSockets.set(
+    interaction.guildId,
+    guildApiSockets
+  );
+}
+
+guildApiSockets.add(apiSocket);
+
+apiSocket.on("close", () => {
+  guildApiSockets?.delete(apiSocket);
+
+  if (guildApiSockets?.size === 0) {
+    activeApiSockets.delete(interaction.guildId!);
+  }
+});
+
     const opusStream = receiver.subscribe(userId, {
       end: {
         behavior: EndBehaviorType.AfterSilence,
@@ -542,27 +564,10 @@ if (apiReady) {
   stop: () => {
     receiver.speaking.off("start", handleSpeakingStart);
 
-    const guildSubscriptions =
-      activeSubscriptions.get(interaction.guildId!);
-
-    if (guildSubscriptions) {
-      for (const stream of guildSubscriptions) {
-        stream.destroy();
-      }
-
-      guildSubscriptions.clear();
-    }
-
-    for (const key of activeSpeakerStreams) {
-      if (key.startsWith(`${interaction.guildId}:`)) {
-        activeSpeakerStreams.delete(key);
-      }
-    }
-
     activeGuildTranscribers.delete(interaction.guildId!);
 
     console.log(
-      "Active transcriber stopped for guild:",
+      "Transcription listener removed:",
       interaction.guildId
     );
   },

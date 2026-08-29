@@ -1,4 +1,5 @@
 import type { Readable } from "node:stream";
+import type WebSocket from "ws";
 
 export type TranslationMode = "normal" | "tactical";
 
@@ -17,6 +18,9 @@ export type ActiveTranscriber = {
 
 export const activeGuildTranscribers =
   new Map<string, ActiveTranscriber>();
+  
+export const activeApiSockets =
+  new Map<string, Set<WebSocket>>();
 
 export const activeSubscriptions =
   new Map<string, Set<Readable>>();
