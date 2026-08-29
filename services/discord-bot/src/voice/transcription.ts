@@ -2,6 +2,7 @@ import type { ChatInputCommandInteraction } from "discord.js";
 import { EndBehaviorType, getVoiceConnection } from "@discordjs/voice";
 import WebSocket from "ws";
 import prism from "prism-media";
+import { queueTtsPlayback } from "./tts";
 
 import { config } from "../config";
 import { convertDiscordPcmToDeepgramPcm, DISCORD_CHANNELS, DISCORD_SAMPLE_RATE } from "./audio";
@@ -167,6 +168,9 @@ function createPocketWaveApiSocket(
             })
           );
         }
+        if (parsed.mode === "tactical" && interaction.guildId) {
+  queueTtsPlayback(interaction.guildId, parsed.translated);
+}
       }
     } catch (error) {
       console.error("Failed to handle API message:", error);

@@ -210,7 +210,7 @@ healthApp.get("/health", async () => {
 });
 
 await healthApp.listen({
-  port: Number(config.port),
+  port: config.port,
   host: "0.0.0.0",
 });
 

@@ -14,6 +14,10 @@ export const config = {
   telegramUrl: process.env.POCKETWAVE_TELEGRAM_URL,
   discordInviteUrl: process.env.POCKETWAVE_DISCORD_INVITE_URL,
 
+  openAiApiKey: process.env.OPENAI_API_KEY,
+  ttsEnabled: process.env.TTS_ENABLED === "true",
+  ttsVoice: process.env.TTS_VOICE ?? "alloy",
+
   port: Number(process.env.PORT ?? 4001),
 };
 
@@ -27,4 +31,8 @@ if (!config.pocketwaveApiWsUrl) {
 
 if (!config.pocketwaveBotSecret) {
   console.warn("POCKETWAVE_BOT_SECRET is not configured.");
+}
+
+if (config.ttsEnabled && !config.openAiApiKey) {
+  throw new Error("OPENAI_API_KEY is required when TTS_ENABLED=true");
 }
