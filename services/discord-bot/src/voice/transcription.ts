@@ -127,7 +127,8 @@ function createPocketWaveApiSocket(
   userId: string,
   sourceLanguage: string,
   targetLanguage: string,
-  mode: string
+  mode: string,
+  onSttReady?: () => void
 ) {
   const socket = new WebSocket(config.pocketwaveApiWsUrl!);
 
@@ -156,6 +157,12 @@ function createPocketWaveApiSocket(
       const parsed = JSON.parse(message.toString()) as PocketWaveApiMessage;
 
       console.log("API message:", parsed);
+
+      if (parsed.type === "stt_ready") {
+  console.log("PocketWave API STT ready");
+  onSttReady?.();
+  return;
+}
 
       if (isTranslationMessage(parsed)) {
         await sendTranslationToDiscord(
@@ -261,13 +268,75 @@ export async function handleTranscribe(interaction: ChatInputCommandInteraction)
 
     console.log("User started speaking:", userId);
 
-    const apiSocket = createPocketWaveApiSocket(
-      interaction,
-      userId,
-      sourceLanguage,
-      targetLanguage,
-      mode
-    );
+    let apiReady = false;
+let speechEnded = false;
+let finalizeSent = false;
+
+const pendingAudioChunks: Buffer[] = [];
+const MAX_PENDING_AUDIO_CHUNKS = 500; // приблизно 10 секунд аудіо
+
+let apiSocket: WebSocket;
+
+function flushPendingAudio() {
+  if (apiSocket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  if (pendingAudioChunks.length > 0) {
+    console.log("Flushing buffered audio chunks:", pendingAudioChunks.length);
+  }
+
+  for (const chunk of pendingAudioChunks) {
+    apiSocket.send(chunk);
+  }
+
+  pendingAudioChunks.length = 0;
+}
+
+function sendFinalize() {
+  if (finalizeSent) {
+    return;
+  }
+
+  if (apiSocket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  finalizeSent = true;
+
+  flushPendingAudio();
+
+  apiSocket.send(
+    JSON.stringify({
+      type: "finalize",
+    })
+  );
+
+  console.log("Sent finalize to PocketWave API");
+
+  setTimeout(() => {
+    if (apiSocket.readyState === WebSocket.OPEN) {
+      apiSocket.close();
+      console.log("Closed PocketWave API socket after finalize delay");
+    }
+  }, 6000);
+}
+
+apiSocket = createPocketWaveApiSocket(
+  interaction,
+  userId,
+  sourceLanguage,
+  targetLanguage,
+  mode,
+  () => {
+    apiReady = true;
+    flushPendingAudio();
+
+    if (speechEnded) {
+      sendFinalize();
+    }
+  }
+);
 
     const opusStream = receiver.subscribe(userId, {
       end: {
@@ -295,9 +364,23 @@ export async function handleTranscribe(interaction: ChatInputCommandInteraction)
       pcmChunkCount += 1;
       pcmByteCount += deepgramPcmChunk.length;
 
-      if (apiSocket.readyState === WebSocket.OPEN) {
-        apiSocket.send(deepgramPcmChunk);
-      }
+      if (apiReady && apiSocket.readyState === WebSocket.OPEN) {
+  apiSocket.send(deepgramPcmChunk);
+} else {
+  pendingAudioChunks.push(deepgramPcmChunk);
+
+  if (pendingAudioChunks.length > MAX_PENDING_AUDIO_CHUNKS) {
+    pendingAudioChunks.shift();
+  }
+
+  if (pcmChunkCount <= 5 || pcmChunkCount % 50 === 0) {
+    console.log("Buffered audio chunk until STT ready:", {
+      chunks: pendingAudioChunks.length,
+      socketState: apiSocket.readyState,
+      apiReady,
+    });
+  }
+}
 
       if (pcmChunkCount % 50 === 0) {
         console.log(
@@ -320,28 +403,27 @@ export async function handleTranscribe(interaction: ChatInputCommandInteraction)
       decoder.destroy();
       guildSubscriptions?.delete(opusStream);
 
-      if (apiSocket.readyState === WebSocket.OPEN) {
-        apiSocket.send(
-          JSON.stringify({
-            type: "finalize",
-          })
-        );
+      speechEnded = true;
 
-        console.log("Sent finalize to PocketWave API");
-      }
+if (apiReady) {
+  sendFinalize();
+} else {
+  console.log("Speech ended before STT ready; waiting to flush audio");
 
-      setTimeout(() => {
-        if (apiSocket.readyState === WebSocket.OPEN) {
-          apiSocket.close();
-          console.log("Closed PocketWave API socket after finalize delay");
-        }
-      }, 6000);
+  setTimeout(() => {
+    if (!finalizeSent) {
+      console.log("Forcing finalize after waiting for STT ready");
+      sendFinalize();
+    }
+  }, 5000);
+}
     });
 
     opusStream.on("error", (error) => {
       console.error("Opus stream error:", error);
 
       activeSpeakerStreams.delete(speakerKey);
+      pendingAudioChunks.length = 0;
 
       decoder.destroy();
       apiSocket.close();
