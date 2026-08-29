@@ -44,6 +44,10 @@ export const commands = [
     ],
   },
   {
+    name: "status",
+    description: "Show the current PocketWave status",
+  },
+  {
     name: "join",
     description: "Make PocketWave bot join your current voice channel",
   },

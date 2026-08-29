@@ -12,6 +12,7 @@ export async function handleHelp(interaction: ChatInputCommandInteraction) {
       "**Main commands:**",
       "",
       "`/setup` — setup guide",
+      "`/status` — show current voice and translation status",
       "`/pair` — pair PocketWave Desktop with this server using a pairing code",
       "`/room` — show manual Room ID fallback",
       "`/join` — make the bot join your current voice channel",

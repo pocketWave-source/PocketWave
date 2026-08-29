@@ -19,6 +19,7 @@ import { handleJoin } from "./handlers/join";
 import { handleStop } from "./handlers/stop";
 import { handleLeave } from "./handlers/leave";
 import { handleTranscribe } from "./voice/transcription";
+import { handleStatus } from "./handlers/status";
 
 const token = config.discordToken;
 const clientId = config.discordClientId;
@@ -148,6 +149,11 @@ client.on("interactionCreate", async (interaction) => {
   try {
     if (interaction.commandName === "ping") {
       await handlePing(interaction);
+      return;
+    }
+
+    if (interaction.commandName === "status") {
+      await handleStatus(interaction);
       return;
     }
 
