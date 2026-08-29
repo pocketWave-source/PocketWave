@@ -111,57 +111,60 @@ export function registerWebSocketRoute(app: FastifyInstance) {
         });
       });
   
-      dgSocket.on("message", async (data) => {
-        try {
-          const response = JSON.parse(data.toString());
-  
-          console.log("Deepgram raw:", response);
-  
-          const transcript =
-            response.channel?.alternatives?.[0]?.transcript?.trim();
-  
-          if (!transcript) return;
-  
-          const isFinal = response.is_final === true;
-          const speechFinal = response.speech_final === true;
-  
-          safeSend(connection, {
-            type: "transcript",
-            text: transcript,
-            isFinal,
-            speechFinal,
-          });
-  
-          if (!isFinal && !speechFinal) {
-            return;
-          }
-  
-          if (transcript === lastFinalTranscript) {
-            return;
-          }
-  
-          lastFinalTranscript = transcript;
-  
-          console.log("Final transcript:", transcript);
-  
-          const translated = await translateText(
-            transcript,
-            settings.targetLanguage,
-            settings.mode
-          );
-  
-          safeSend(connection, {
-            type: "translation",
-            original: transcript,
-            translated,
-            sourceLanguage: settings.sourceLanguage,
-            targetLanguage: settings.targetLanguage,
-            mode: settings.mode,
-          });
-        } catch (error) {
-          console.error("Deepgram message parse error:", error);
-        }
-      });
+      dgSocket.on("message", async (raw) => {
+  try {
+    const data = JSON.parse(raw.toString());
+
+    if (data.type !== "Results") {
+      return;
+    }
+
+    const transcript = data.channel?.alternatives?.[0]?.transcript?.trim() ?? "";
+
+    console.log("Deepgram result:", {
+      transcript,
+      isFinal: data.is_final,
+      speechFinal: data.speech_final,
+      fromFinalize: data.from_finalize,
+      duration: data.duration,
+      start: data.start,
+    });
+
+    if (!transcript) {
+      console.log("Deepgram transcript empty, skipping");
+      return;
+    }
+
+    safeSend(connection, {
+      type: "transcript",
+      text: transcript,
+      isFinal: data.is_final,
+    });
+
+    if (!data.is_final) {
+      return;
+    }
+
+    console.log("Translating final transcript:", transcript);
+
+    const translated = await translateText(
+      transcript,
+      settings.targetLanguage,
+      settings.mode,
+);
+
+    console.log("Translation result:", translated);
+
+    safeSend(connection, {
+      type: "translation",
+      original: transcript,
+      translated,
+      mode: settings.mode,
+    });
+  } catch (error) {
+    console.error("Failed to handle Deepgram message:", error);
+  }
+});
   
       dgSocket.on("error", (error) => {
         console.error("Deepgram error:", error);
