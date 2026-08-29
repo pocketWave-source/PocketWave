@@ -1,5 +1,6 @@
 import type { ChatInputCommandInteraction } from "discord.js";
 import { activeGuildTranscribers } from "../voice/state";
+import { stopGuildTts } from "../voice/tts";
 
 export async function handleStop(interaction: ChatInputCommandInteraction) {
   if (!interaction.guildId) {
@@ -21,6 +22,7 @@ export async function handleStop(interaction: ChatInputCommandInteraction) {
   }
 
   transcriber.stop();
+  stopGuildTts(interaction.guildId);
 
   await interaction.reply("PocketWave stopped transcribing.");
   console.log("Transcription stopped");

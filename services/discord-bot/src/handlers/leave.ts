@@ -27,6 +27,7 @@ export async function handleLeave(interaction: ChatInputCommandInteraction) {
     return;
   }
 
+  stopGuildTts(interaction.guildId);
   connection.destroy();
 
   await interaction.reply("PocketWave left the voice channel.");
