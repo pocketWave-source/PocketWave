@@ -1,6 +1,5 @@
 import "dotenv/config";
 import {
-  ChannelType,
   Client,
   GatewayIntentBits,
   PermissionFlagsBits,
@@ -8,7 +7,6 @@ import {
 import {
     EndBehaviorType,
   getVoiceConnection,
-  joinVoiceChannel,
 } from "@discordjs/voice";
 
 import type { Readable } from "node:stream";
@@ -24,6 +22,10 @@ import { handleHelp } from "./handlers/help";
 import { handleLinks } from "./handlers/links";
 import { handleFeedback } from "./handlers/feedback";
 import { handlePair } from "./handlers/pair";
+import { handleJoin } from "./handlers/join";
+import { handleStop } from "./handlers/stop";
+import { handleLeave } from "./handlers/leave";
+import { activeGuildTranscribers } from "./voice/state";
 
 
 const token = config.discordToken;
@@ -381,12 +383,6 @@ const DISCORD_MESSAGE_COOLDOWN_MS = 2000;
 
 const lastDiscordMessageAtByUser = new Map<string, number>();
 
-type ActiveTranscriber = {
-  stop: () => void;
-};
-
-const activeGuildTranscribers = new Map<string, ActiveTranscriber>();
-
 client.once("ready", async () => {
   console.log(`PocketWave Discord bot ${POCKETWAVE_VERSION} logged in as ${client.user?.tag}`);
 
@@ -432,41 +428,10 @@ if (interaction.commandName === "help") {
     return;
   }
 
-  if (interaction.commandName === "join") {
-    if (!interaction.guildId || !interaction.guild) {
-      await interaction.reply({
-        content: "This command only works inside a server.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const member = await interaction.guild.members.fetch(interaction.user.id);
-    const voiceChannel = member.voice.channel;
-
-    if (!voiceChannel || voiceChannel.type !== ChannelType.GuildVoice) {
-      await interaction.reply({
-        content: "Join a voice channel first.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    joinVoiceChannel({
-      channelId: voiceChannel.id,
-      guildId: interaction.guildId,
-      adapterCreator: interaction.guild.voiceAdapterCreator,
-      selfDeaf: false,
-      selfMute: true
-    });
-
-    await interaction.reply(
-      `PocketWave joined **${voiceChannel.name}**. Translation is not active yet.`
-    );
-
-    console.log(`Joined voice channel: ${voiceChannel.name}`);
-    return;
-  }
+if (interaction.commandName === "join") {
+  await handleJoin(interaction);
+  return;
+}
 
   
 
@@ -645,57 +610,15 @@ if (interaction.commandName === "links") {
   }
 
 if (interaction.commandName === "stop") {
-  if (!interaction.guildId) {
-    await interaction.reply({
-      content: "This command only works inside a server.",
-      ephemeral: true,
-    });
-    return;
-  }
-
-  const transcriber = activeGuildTranscribers.get(interaction.guildId);
-
-if (!transcriber) {
-  await interaction.reply({
-    content: "PocketWave is not currently transcribing this server.",
-    ephemeral: true,
-  });
+  await handleStop(interaction);
   return;
 }
 
-transcriber.stop();
-
-await interaction.reply("PocketWave stopped transcribing.");
-console.log("Transcription stopped");
-return;
+if (interaction.commandName === "leave") {
+  await handleLeave(interaction);
+  return;
 }
-
-  if (interaction.commandName === "leave") {
-    if (!interaction.guildId) {
-      await interaction.reply({
-        content: "This command only works inside a server.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const connection = getVoiceConnection(interaction.guildId);
-
-    if (!connection) {
-      await interaction.reply({
-        content: "PocketWave is not connected to a voice channel.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    connection.destroy();
-
-    await interaction.reply("PocketWave left the voice channel.");
-    console.log("Left voice channel");
-  }
 });
-
 const healthApp = Fastify();
 
 healthApp.get("/health", async () => {
