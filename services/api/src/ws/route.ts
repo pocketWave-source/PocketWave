@@ -35,7 +35,7 @@ export function registerWebSocketRoute(app: FastifyInstance) {
     let settings: ClientSettings = { ...DEFAULT_SETTINGS };
     let dgSocket: WebSocket | null = null;
     let lastFinalTranscript = "";
-      let producerStartedAt: number | null = null;
+    let producerStartedAt: number | null = null;
     let maxProducerTimer: NodeJS.Timeout | null = null;
     let idleProducerTimer: NodeJS.Timeout | null = null;
   
@@ -207,7 +207,10 @@ export function registerWebSocketRoute(app: FastifyInstance) {
         const payload = JSON.parse(message.toString());
   
         if (payload.type === "create_pairing") {
-    const session = createPairingSession(connection);
+    const session = createPairingSession(
+  connection,
+  config.pairingTtlMs
+);
   
     safeSend(connection, {
       type: "pairing_created",
@@ -393,14 +396,21 @@ export function registerWebSocketRoute(app: FastifyInstance) {
     }
   
     broadcastToRoom(roomId, {
-      type: "overlay_translation",
-      roomId,
-      userId: payload.userId,
-      speakerName: payload.speakerName,
-      original: payload.original,
-      translated: payload.translated,
-      mode: payload.mode ?? "normal",
-    });
+  type: "overlay_translation",
+
+  roomId,
+  userId: payload.userId,
+  speakerName: payload.speakerName,
+
+  original: payload.original,
+  translated: payload.translated,
+
+  sourceLanguage: payload.sourceLanguage,
+  targetLanguage: payload.targetLanguage,
+
+  mode: payload.mode ?? "normal",
+  voiceEnabled: payload.voiceEnabled ?? false,
+});
   
     return;
   }
