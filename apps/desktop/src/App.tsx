@@ -4,54 +4,12 @@ import { config } from "./config";
 
 type InputSource = "discord" | "microphone";
 
-type TranscriptMessage = {
-  type: "transcript";
-  text: string;
-  isFinal: boolean;
-  speechFinal: boolean;
-};
 
-type TranslationMessage = {
-  type: "translation";
-  original: string;
-  translated: string;
-  sourceLanguage: string;
-  targetLanguage: string;
-  mode?: "normal" | "tactical";
-};
 
-type SettingsAppliedMessage = {
-  type: "settings_applied";
-  sourceLanguage: string;
-  targetLanguage: string;
-};
 
-type SttReadyMessage = {
-  type: "stt_ready";
-  sourceLanguage: string;
-  targetLanguage: string;
-};
 
-type ErrorMessage = {
-  type: "error";
-  message: string;
-};
 
-type OverlayTranslationMessage = {
-  type: "overlay_translation";
-  roomId: string;
-  userId?: string;
-  speakerName?: string;
-  original: string;
-  translated: string;
-  mode?: "normal" | "tactical";
-};
 
-type RoomJoinedMessage = {
-  type: "room_joined";
-  roomId: string;
-  role: string;
-};
 
 type TranslationHistoryItem = {
   id: string;
@@ -62,14 +20,6 @@ type TranslationHistoryItem = {
   createdAt: number;
 };
 
-type ServerMessage =
-  | TranscriptMessage
-  | TranslationMessage
-  | SettingsAppliedMessage
-  | SttReadyMessage
-  | ErrorMessage
-  | OverlayTranslationMessage
-  | RoomJoinedMessage;
 
 declare global {
   interface Window {
