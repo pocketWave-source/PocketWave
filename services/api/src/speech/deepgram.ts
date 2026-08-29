@@ -20,6 +20,13 @@ export function buildDeepgramUrl(sourceLanguage: string) {
 export function createDeepgramSocket(sourceLanguage: string) {
   const dgUrl = buildDeepgramUrl(sourceLanguage);
 
+  console.log("Deepgram connect params:", {
+  language: settings.sourceLanguage,
+  encoding: "linear16",
+  sampleRate: 16000,
+  channels: 1,
+});
+
   return new WebSocket(dgUrl, {
     headers: {
       Authorization: `Token ${config.deepgramApiKey}`,
