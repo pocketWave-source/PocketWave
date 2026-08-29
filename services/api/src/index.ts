@@ -4,8 +4,12 @@ import websocket from "@fastify/websocket";
 import WebSocket from "ws";
 import OpenAI from "openai";
 import crypto from "node:crypto";
+import { config } from "./config";
+import { ClientSettings, PairingSession, RoomClient, TranslationMode } from "./types";
+import { broadcastToRoom, joinRoom, leaveAllRooms } from "./ws/rooms";
+import { createPairingSession, consumePairingSession, removePairingSessionsForSocket } from "./ws/pairing";
 
-const POCKETWAVE_BOT_SECRET = process.env.POCKETWAVE_BOT_SECRET;
+const POCKETWAVE_BOT_SECRET = config.pocketwaveBotSecret;
 
 if (!POCKETWAVE_BOT_SECRET) {
   console.warn("POCKETWAVE_BOT_SECRET is not configured. Room relay is not protected.");
@@ -26,147 +30,10 @@ const app = Fastify({
 await app.register(websocket);
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: config.openAiApiKey,
 });
 
-type RoomClient = {
-  socket: WebSocket;
-  role: "viewer" | "producer";
-};
-
-const rooms = new Map<string, Set<RoomClient>>();
-
 const PAIRING_TTL_MS = Number(process.env.PAIRING_TTL_MS ?? 10 * 60 * 1000);
-
-type PairingSession = {
-  code: string;
-  socket: WebSocket;
-  expiresAt: number;
-  timer: NodeJS.Timeout;
-};
-
-const pairingSessions = new Map<string, PairingSession>();
-
-function generatePairingCode() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
-
-  for (let i = 0; i < 6; i++) {
-    code += alphabet[crypto.randomInt(0, alphabet.length)];
-  }
-
-  return code;
-}
-
-function createPairingSession(socket: WebSocket) {
-  let code = generatePairingCode();
-
-  while (pairingSessions.has(code)) {
-    code = generatePairingCode();
-  }
-
-  const timer = setTimeout(() => {
-    pairingSessions.delete(code);
-
-    safeSend(socket, {
-      type: "pairing_expired",
-      code,
-    });
-  }, PAIRING_TTL_MS);
-
-  const session: PairingSession = {
-    code,
-    socket,
-    expiresAt: Date.now() + PAIRING_TTL_MS,
-    timer,
-  };
-
-  pairingSessions.set(code, session);
-
-  return session;
-}
-
-function consumePairingSession(code: string) {
-  const normalizedCode = code.trim().toUpperCase();
-  const session = pairingSessions.get(normalizedCode);
-
-  if (!session) {
-    return null;
-  }
-
-  pairingSessions.delete(normalizedCode);
-  clearTimeout(session.timer);
-
-  if (session.expiresAt < Date.now()) {
-    return null;
-  }
-
-  if (session.socket.readyState !== WebSocket.OPEN) {
-    return null;
-  }
-
-  return session;
-}
-
-function removePairingSessionsForSocket(socket: WebSocket) {
-  for (const [code, session] of pairingSessions.entries()) {
-    if (session.socket === socket) {
-      clearTimeout(session.timer);
-      pairingSessions.delete(code);
-    }
-  }
-}
-
-function joinRoom(roomId: string, client: RoomClient) {
-  let room = rooms.get(roomId);
-
-  if (!room) {
-    room = new Set();
-    rooms.set(roomId, room);
-  }
-
-  room.add(client);
-
-  console.log(`Client joined room ${roomId} as ${client.role}`);
-}
-
-function leaveAllRooms(socket: WebSocket) {
-  for (const [roomId, clients] of rooms.entries()) {
-    for (const client of clients) {
-      if (client.socket === socket) {
-        clients.delete(client);
-      }
-    }
-
-    if (clients.size === 0) {
-      rooms.delete(roomId);
-    }
-  }
-}
-
-function broadcastToRoom(roomId: string, payload: unknown) {
-  const room = rooms.get(roomId);
-
-  if (!room) {
-    return;
-  }
-
-  const message = JSON.stringify(payload);
-
-  for (const client of room) {
-    if (client.socket.readyState === WebSocket.OPEN) {
-      client.socket.send(message);
-    }
-  }
-}
-
-type TranslationMode = "normal" | "tactical";
-
-type ClientSettings = {
-  sourceLanguage: string;
-  targetLanguage: string;
-  mode: TranslationMode;
-};
 
 const DEFAULT_SETTINGS: ClientSettings = {
   sourceLanguage: "en",
@@ -331,7 +198,7 @@ app.get("/ws", { websocket: true }, (connection) => {
 
     dgSocket = new WebSocket(dgUrl, {
       headers: {
-        Authorization: `Token ${process.env.DEEPGRAM_API_KEY}`,
+        Authorization: `Token ${config.deepgramApiKey}`,
       },
     });
 
@@ -437,7 +304,7 @@ app.get("/ws", { websocket: true }, (connection) => {
       const payload = JSON.parse(message.toString());
 
       if (payload.type === "create_pairing") {
-  const session = createPairingSession(connection);
+  const session = createPairingSession(connection, {});
 
   safeSend(connection, {
     type: "pairing_created",
