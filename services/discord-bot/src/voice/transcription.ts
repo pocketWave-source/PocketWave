@@ -9,6 +9,7 @@ import { convertDiscordPcmToDeepgramPcm, DISCORD_CHANNELS, DISCORD_SAMPLE_RATE }
 import {
   activeGuildTranscribers,
   activeSubscriptions,
+  activeSpeakerStreams,
   DISCORD_MESSAGE_COOLDOWN_MS,
   lastDiscordMessageAtByUser,
   lastTranslationByGuild,
@@ -249,6 +250,15 @@ export async function handleTranscribe(interaction: ChatInputCommandInteraction)
       return;
     }
 
+    const speakerKey = `${interaction.guildId}:${userId}`;
+
+  if (activeSpeakerStreams.has(speakerKey)) {
+    console.log("Speaker already has active stream, skipping:", speakerKey);
+    return;
+  }
+
+  activeSpeakerStreams.add(speakerKey);
+
     console.log("User started speaking:", userId);
 
     const apiSocket = createPocketWaveApiSocket(
@@ -305,6 +315,8 @@ export async function handleTranscribe(interaction: ChatInputCommandInteraction)
         `User stopped speaking: ${userId}. Converted chunks: ${pcmChunkCount}, bytes: ${pcmByteCount}`
       );
 
+      activeSpeakerStreams.delete(speakerKey);
+
       decoder.destroy();
       guildSubscriptions?.delete(opusStream);
 
@@ -329,6 +341,8 @@ export async function handleTranscribe(interaction: ChatInputCommandInteraction)
     opusStream.on("error", (error) => {
       console.error("Opus stream error:", error);
 
+      activeSpeakerStreams.delete(speakerKey);
+
       decoder.destroy();
       apiSocket.close();
       guildSubscriptions?.delete(opusStream);
@@ -349,6 +363,11 @@ export async function handleTranscribe(interaction: ChatInputCommandInteraction)
         }
 
         guildSubscriptions.clear();
+        for (const key of activeSpeakerStreams) {
+  if (key.startsWith(`${interaction.guildId}:`)) {
+    activeSpeakerStreams.delete(key);
+  }
+}
       }
 
       activeGuildTranscribers.delete(interaction.guildId!);

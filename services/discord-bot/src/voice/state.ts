@@ -8,6 +8,8 @@ export const activeGuildTranscribers = new Map<string, ActiveTranscriber>();
 
 export const activeSubscriptions = new Map<string, Set<Readable>>();
 
+export const activeSpeakerStreams = new Set<string>();
+
 export const lastTranslationByGuild = new Map<string, string>();
 
 export const lastDiscordMessageAtByUser = new Map<string, number>();
