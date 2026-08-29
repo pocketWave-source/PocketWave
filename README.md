@@ -53,6 +53,32 @@ Discord Text Channel
 Windows Desktop Overlay
 ```
 
+## Latest Release
+
+Current desktop version: **v0.1.3**
+
+New in v0.1.3:
+
+- Desktop pairing flow
+- Pairing code generation in PocketWave Desktop
+- Discord `/pair` command
+- Automatic Desktop connection to Discord server
+- Manual Room ID setup is now optional
+- Improved beta onboarding
+
+Recommended setup flow:
+
+1. Download PocketWave Desktop
+2. Open Discord Voice mode
+3. Click **Generate Pairing Code**
+4. In Discord, run:
+
+```txt
+/pair code: YOUR_CODE
+/join
+/transcribe from: English to: Ukrainian mode: Tactical
+```
+
 ## Deployment
 
 PocketWave currently uses Render for cloud deployment.
