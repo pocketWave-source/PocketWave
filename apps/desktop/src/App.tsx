@@ -7,6 +7,7 @@ type InputSource = "discord" | "microphone";
 
 type OverlayActivity =
   | "disconnected"
+  | "idle"
   | "listening"
   | "translating";
 
@@ -136,6 +137,8 @@ function App() {
   const [minimalMode, setMinimalMode] = useState(false);
   const [overlayActivity, setOverlayActivity] =
   useState<OverlayActivity>("disconnected");
+  const [translationActive, setTranslationActive] =
+  useState(false);
 
   const [sourceLanguage, setSourceLanguage] = useState(() =>
   getStoredValue(STORAGE_KEYS.sourceLanguage, "en")
@@ -329,10 +332,10 @@ function handleSocketMessage(payload: any) {
   }
 
   if (payload.type === "room_joined") {
-    setRoomStatus("Room joined");
-    setOverlayActivity("listening");
-    return;
-  }
+  setRoomStatus("Room joined");
+  setOverlayActivity("idle");
+  return;
+}
 
   if (payload.type === "settings_applied") {
   console.log("Settings applied:", payload);
@@ -374,7 +377,64 @@ if (payload.type === "overlay_speaking") {
   return;
 }
 
+if (payload.type === "overlay_session_state") {
+  const active = Boolean(payload.active);
+
+  setTranslationActive(active);
+
+  setCurrentSourceLanguage(
+    payload.sourceLanguage ?? "en"
+  );
+
+  setCurrentTargetLanguage(
+    payload.targetLanguage ?? "uk"
+  );
+
+  setCurrentMode(
+    payload.mode === "tactical"
+      ? "tactical"
+      : "normal"
+  );
+
+  setCurrentVoiceEnabled(
+    Boolean(payload.voiceEnabled)
+  );
+
+  if (active) {
+    setOverlayActivity("listening");
+    setRoomStatus("Translation active");
+  } else {
+    setOverlayActivity("idle");
+    setRoomStatus("Translation inactive");
+
+    setSpeakingUser("");
+    setSpeakerName("");
+    setOriginal("");
+    setTranslated("");
+
+    if (activityTimerRef.current) {
+      clearTimeout(activityTimerRef.current);
+      activityTimerRef.current = null;
+    }
+
+    if (clearTimerRef.current) {
+      window.clearTimeout(clearTimerRef.current);
+      clearTimerRef.current = null;
+    }
+  }
+
+  return;
+}
+
   if (payload.type === "overlay_translation") {
+
+    if (payload.sourceLanguage) {
+  setSourceLanguage(payload.sourceLanguage);
+}
+
+if (payload.targetLanguage) {
+  setTargetLanguage(payload.targetLanguage);
+}
 
     setOverlayActivity("translating");
 
@@ -760,60 +820,110 @@ async function loadAudioDevices() {
   </div>
 )}
 
-          <div className="languageRow">
-            <label>
-              From
-              <select
-                value={sourceLanguage}
-                onChange={(event) => setSourceLanguage(event.target.value)}
-              >
-                {languages.map((language) => (
-                  <option key={language.code} value={language.code}>
-                    {language.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {inputSource === "discord" ? (
+  <div className="discordSessionCard">
+    <div className="discordSessionLanguages">
+      <span>
+        {getLanguageFlag(currentSourceLanguage)}{" "}
+        {getLanguageLabel(currentSourceLanguage)}
+      </span>
 
-            <label>
-              To
-              <select
-                value={targetLanguage}
-                onChange={(event) => setTargetLanguage(event.target.value)}
-              >
-                {languages.map((language) => (
-                  <option key={language.code} value={language.code}>
-                    {language.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+      <span className="languageArrow">→</span>
 
-{inputSource === "discord" && (
-          <div className="roomRow">
-  <label>
-    Room ID
-    <input
-      value={roomId}
-      onChange={(event) => setRoomId(event.target.value)}
-      placeholder="Discord server ID"
-    />
-  </label>
+      <span>
+        {getLanguageFlag(currentTargetLanguage)}{" "}
+        {getLanguageLabel(currentTargetLanguage)}
+      </span>
+    </div>
+
+    <div
+  className={
+    translationActive
+      ? "translationState active"
+      : "translationState inactive"
+  }
+>
+  {translationActive
+    ? "● Translation active"
+    : "○ No active translation"}
 </div>
+
+    <div className="discordSessionMeta">
+      <span
+        className={
+          currentMode === "tactical"
+            ? "sessionMode tactical"
+            : "sessionMode"
+        }
+      >
+        {currentMode === "tactical" ? "TACTICAL" : "NORMAL"}
+      </span>
+
+      <span className="sessionVoice">
+        {currentVoiceEnabled ? "🔊 Voice ON" : "🔇 Voice OFF"}
+      </span>
+    </div>
+  </div>
+) : (
+  <div className="languageRow">
+    <label>
+      From
+      <select
+        value={sourceLanguage}
+        onChange={(event) => setSourceLanguage(event.target.value)}
+      >
+        {languages.map((language) => (
+          <option key={language.code} value={language.code}>
+            {language.label}
+          </option>
+        ))}
+      </select>
+    </label>
+
+    <label>
+      To
+      <select
+        value={targetLanguage}
+        onChange={(event) => setTargetLanguage(event.target.value)}
+      >
+        {languages.map((language) => (
+          <option key={language.code} value={language.code}>
+            {language.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  </div>
+)}
+
+{inputSource === "discord" && roomId && (
+  <div className="roomIdCompact">
+    Room connected
+    <span>{roomId}</span>
+  </div>
 )}
 
 {inputSource === "discord" && (
   <div className="pairingBox">
     <div className="pairingTitle">Pair with Discord</div>
 
-    <button
-      type="button"
-      className="pairingButton"
-      onClick={requestPairingCode}
-    >
-      Generate Pairing Code
-    </button>
+    {pairedGuildName ? (
+  <div className="pairedSuccess">
+    <span>✓</span>
+    <div>
+      <strong>{pairedGuildName}</strong>
+      <small>Discord connected</small>
+    </div>
+  </div>
+) : (
+  <button
+    type="button"
+    className="pairingButton"
+    onClick={requestPairingCode}
+  >
+    Generate Pairing Code
+  </button>
+)}
 
     {pairingCode && (
       <div className="pairingCodeBox">
@@ -826,11 +936,6 @@ async function loadAudioDevices() {
       <div className="pairingStatus">{pairingStatus}</div>
     )}
 
-    {pairedGuildName && (
-      <div className="pairedGuild">
-        Connected to: <strong>{pairedGuildName}</strong>
-      </div>
-    )}
   </div>
 )}
 
@@ -884,9 +989,15 @@ async function loadAudioDevices() {
         </section>
       )}
 
+{speakingUser && (
+  <div className="speakingIndicator">
+    🎙️ {speakingUser} is speaking...
+  </div>
+)}
 <div className={`activityIndicator ${overlayActivity}`}>
   <span className="activityDot" />
 
+  {overlayActivity === "idle" && "Ready"}
   {overlayActivity === "listening" && "Listening"}
   {overlayActivity === "translating" && "Translating"}
   {overlayActivity === "disconnected" && "Disconnected"}

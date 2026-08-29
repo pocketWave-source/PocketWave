@@ -5,6 +5,8 @@ import {
 
 import { getVoiceConnection } from "@discordjs/voice";
 import { cleanupGuildVoiceSession } from "../voice/cleanup";
+import { activeGuildTranscribers } from "../voice/state";
+import { publishRoomSessionState } from "../pocketwave/apiClient";
 
 export async function handleLeave(
   interaction: ChatInputCommandInteraction
@@ -27,6 +29,22 @@ export async function handleLeave(
     });
     return;
   }
+
+  const transcriber =
+  activeGuildTranscribers.get(interaction.guildId);
+
+if (transcriber) {
+  await publishRoomSessionState(
+    interaction.guildId,
+    transcriber.settings,
+    false
+  ).catch((error) => {
+    console.error(
+      "Failed to publish stopped session state:",
+      error
+    );
+  });
+}
 
   cleanupGuildVoiceSession(interaction.guildId, {
     disconnect: true,

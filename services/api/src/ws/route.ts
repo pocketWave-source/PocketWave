@@ -402,6 +402,47 @@ export function registerWebSocketRoute(app: FastifyInstance) {
   return;
 }
   
+if (payload.type === "room_session_state") {
+  const roomId = String(payload.roomId ?? "");
+
+  if (
+    !config.pocketwaveBotSecret ||
+    payload.botSecret !== config.pocketwaveBotSecret
+  ) {
+    console.warn(
+      "Rejected room_session_state: invalid bot secret"
+    );
+    return;
+  }
+
+  if (!roomId) {
+    return;
+  }
+
+  broadcastToRoom(roomId, {
+    type: "overlay_session_state",
+
+    roomId,
+    active: Boolean(payload.active),
+
+    sourceLanguage:
+      payload.sourceLanguage ?? "en",
+
+    targetLanguage:
+      payload.targetLanguage ?? "uk",
+
+    mode:
+      payload.mode === "tactical"
+        ? "tactical"
+        : "normal",
+
+    voiceEnabled:
+      Boolean(payload.voiceEnabled),
+  });
+
+  return;
+}
+
   if (payload.type === "room_translation") {
     const roomId = String(payload.roomId ?? "");
     if (!config.pocketwaveBotSecret || payload.botSecret !== config.pocketwaveBotSecret) {

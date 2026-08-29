@@ -23,6 +23,7 @@ import {
   lastTranslationByGuild,
   activeApiSockets
 } from "./state";
+import { publishRoomSessionState } from "../pocketwave/apiClient";
 
 type PocketWaveApiMessage =
   | {
@@ -405,6 +406,36 @@ function flushPendingAudio() {
   pendingAudioChunks.length = 0;
 }
 
+function sendRoomSessionState(
+  socket: WebSocket,
+  interaction: ChatInputCommandInteraction,
+  settings: TranscriberSettings,
+  active: boolean
+) {
+  if (
+    socket.readyState !== WebSocket.OPEN ||
+    !interaction.guildId
+  ) {
+    return;
+  }
+
+  socket.send(
+    JSON.stringify({
+      type: "room_session_state",
+      botSecret: config.pocketwaveBotSecret,
+
+      roomId: interaction.guildId,
+
+      active,
+
+      sourceLanguage: settings.sourceLanguage,
+      targetLanguage: settings.targetLanguage,
+      mode: settings.mode,
+      voiceEnabled: settings.voiceEnabled,
+    })
+  );
+}
+
 function sendFinalize() {
   if (finalizeSent) {
     return;
@@ -444,6 +475,13 @@ apiSocket = createPocketWaveApiSocket(
   () => {
     apiReady = true;
     flushPendingAudio();
+
+    sendRoomSessionState(
+  apiSocket,
+  interaction,
+  sessionSettings,
+  true
+);
 
     if (speechEnded) {
       sendFinalize();
@@ -605,6 +643,17 @@ if (apiReady) {
   settings: sessionSettings,
   startedAt: Date.now(),
 
+  notifySettingsChanged: () => {
+  if (apiSocket?.readyState === WebSocket.OPEN) {
+    sendRoomSessionState(
+      apiSocket,
+      interaction,
+      sessionSettings,
+      true
+    );
+  }
+},
+
   stop: () => {
     receiver.speaking.off("start", handleSpeakingStart);
 
@@ -615,6 +664,17 @@ if (apiReady) {
       interaction.guildId
     );
   },
+});
+
+void publishRoomSessionState(
+  interaction.guildId,
+  sessionSettings,
+  true
+).catch((error) => {
+  console.error(
+    "Failed to publish active session state:",
+    error
+  );
 });
 
   await interaction.editReply(

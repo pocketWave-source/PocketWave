@@ -12,13 +12,17 @@ export type TranscriberSettings = {
 
 export type ActiveTranscriber = {
   stop: () => void;
+
   settings: TranscriberSettings;
+
+  notifySettingsChanged: () => void;
+
   startedAt: number;
 };
 
 export const activeGuildTranscribers =
   new Map<string, ActiveTranscriber>();
-  
+
 export const activeApiSockets =
   new Map<string, Set<WebSocket>>();
 

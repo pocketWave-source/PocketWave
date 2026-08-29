@@ -581,3 +581,128 @@ button:disabled {
     opacity: 1;
   }
 }
+
+.discordSessionCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  width: 100%;
+  box-sizing: border-box;
+
+  padding: 12px 14px;
+
+  border: 1px solid rgba(70, 180, 255, 0.25);
+  border-radius: 14px;
+
+  background: rgba(10, 18, 30, 0.55);
+}
+
+.discordSessionLanguages {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.languageArrow {
+  opacity: 0.55;
+  font-size: 16px;
+}
+
+.discordSessionMeta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  font-size: 11px;
+}
+
+.sessionMode {
+  padding: 4px 8px;
+
+  border-radius: 999px;
+
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+
+  background: rgba(90, 130, 180, 0.18);
+}
+
+.sessionMode.tactical {
+  background: rgba(40, 190, 230, 0.18);
+}
+
+.sessionVoice {
+  opacity: 0.8;
+}
+
+.roomIdCompact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 7px 10px;
+
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+.roomIdCompact span {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  font-family: monospace;
+}
+
+.pairedSuccess {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  padding: 10px;
+
+  border-radius: 12px;
+  background: rgba(60, 200, 130, 0.08);
+}
+
+.pairedSuccess > span {
+  font-size: 18px;
+}
+
+.pairedSuccess div {
+  display: flex;
+  flex-direction: column;
+}
+
+.pairedSuccess small {
+  margin-top: 2px;
+  opacity: 0.55;
+  font-size: 10px;
+}
+
+.translationState {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.translationState.active {
+  opacity: 1;
+}
+
+.translationState.inactive {
+  opacity: 0.5;
+}
+
+.activityIndicator.idle {
+  opacity: 0.55;
+}

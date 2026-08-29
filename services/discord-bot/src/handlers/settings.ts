@@ -4,6 +4,7 @@ import {
 } from "discord.js";
 
 import { activeGuildTranscribers } from "../voice/state";
+import { publishRoomSessionState } from "../pocketwave/apiClient";
 
 const LANGUAGE_NAMES: Record<string, string> = {
   en: "English",
@@ -103,7 +104,19 @@ export async function handleSettings(
   if (voice) {
     transcriber.settings.voiceEnabled =
       voice === "on";
+      await publishRoomSessionState(
+  interaction.guildId,
+  transcriber.settings,
+  true
+).catch((error) => {
+  console.error(
+    "Failed to publish updated session settings:",
+    error
+  );
+});
   }
+
+  
 
   console.log(
     "Translation settings changed:",
