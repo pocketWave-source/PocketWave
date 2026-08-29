@@ -2,11 +2,12 @@ import "dotenv/config";
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import WebSocket from "ws";
-import OpenAI from "openai";
 import { config } from "./config";
-import { ClientSettings, PairingSession, RoomClient, TranslationMode } from "./types";
+import { ClientSettings } from "./types";
 import { broadcastToRoom, joinRoom, leaveAllRooms } from "./ws/rooms";
 import { createPairingSession, consumePairingSession, removePairingSessionsForSocket } from "./ws/pairing";
+import { createDeepgramSocket } from "./speech/deepgram";
+import { translateText } from "./speech/translator";
 
 const POCKETWAVE_BOT_SECRET = config.pocketwaveBotSecret;
 
@@ -28,10 +29,6 @@ const app = Fastify({
 
 await app.register(websocket);
 
-const openai = new OpenAI({
-  apiKey: config.openAiApiKey,
-});
-
 const PAIRING_TTL_MS = Number(config.pairingTtlMs ?? 10 * 60 * 1000);
 
 const DEFAULT_SETTINGS: ClientSettings = {
@@ -48,69 +45,6 @@ const targetLanguageNames: Record<string, string> = {
   es: "Spanish",
   fr: "French",
 };
-
-function buildDeepgramUrl(sourceLanguage: string) {
-  const url = new URL("wss://api.deepgram.com/v1/listen");
-
-  url.searchParams.set("model", "nova-2");
-  url.searchParams.set("language", sourceLanguage);
-  url.searchParams.set("smart_format", "true");
-  url.searchParams.set("interim_results", "true");
-  url.searchParams.set("endpointing", "300");
-
-  url.searchParams.set("encoding", "linear16");
-  url.searchParams.set("sample_rate", "16000");
-  url.searchParams.set("channels", "1");
-
-  return url.toString();
-}
-
-async function translateText(
-  text: string,
-  targetLanguage: string,
-  mode: TranslationMode
-) {
-  const targetName = targetLanguageNames[targetLanguage] ?? "Ukrainian";
-
-  const normalInstructions = `
-Translate gaming voice chat into natural ${targetName}.
-
-Rules:
-- Return only the translation.
-- Keep it short and readable for subtitles.
-- Preserve gaming meaning, not word-for-word translation.
-- Keep known gaming terms natural: rush, rotate, heal, push, site, mid, B, A, flank.
-- Do not add explanations.
-`.trim();
-
-  const tacticalInstructions = `
-Convert gaming voice chat into a short tactical callout in ${targetName}.
-
-Rules:
-- Return only the tactical callout.
-- Maximum 1 short line.
-- Prefer 2-6 words when possible.
-- Keep urgent gameplay meaning.
-- Remove filler words.
-- Use short gamer-style phrases.
-- Preserve important map/game terms like A, B, mid, short, long, flank, ship, left, right.
-- Do not explain.
-- Do not add extra context.
-
-Examples:
-"They are coming from the left side of our ship" -> "Ворог зліва. Біля корабля."
-"Rush B fast, one is low" -> "Швидко B. Один low."
-"I need healing behind the wall" -> "Потрібен heal за стіною."
-`.trim();
-
-  const response = await openai.responses.create({
-    model: "gpt-4.1-mini",
-    instructions: mode === "tactical" ? tacticalInstructions : normalInstructions,
-    input: text,
-  });
-
-  return response.output_text;
-}
 
 function safeSend(socket: WebSocket, payload: unknown) {
   if (socket.readyState === WebSocket.OPEN) {
@@ -193,13 +127,7 @@ app.get("/ws", { websocket: true }, (connection) => {
 
     lastFinalTranscript = "";
 
-    const dgUrl = buildDeepgramUrl(settings.sourceLanguage);
-
-    dgSocket = new WebSocket(dgUrl, {
-      headers: {
-        Authorization: `Token ${config.deepgramApiKey}`,
-      },
-    });
+    dgSocket = createDeepgramSocket(settings.sourceLanguage);
 
     dgSocket.on("open", () => {
       console.log("Deepgram connected:", settings);
